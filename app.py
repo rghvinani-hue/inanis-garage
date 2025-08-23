@@ -177,14 +177,30 @@ def create_calendar_event(summary, description, start_date, end_date):
 @login_required
 def index():
     status = {}
+    available_count = 0
+    assigned_count = 0
+    
     today = datetime.today().strftime("%Y-%m-%d")
     for vid, v in vehicles.items():
         who = "Available"
         for a in assignments:
             if a["car_id"] == vid and a["start_date"] <= today <= a["end_date"]:
                 who = a["driver"]
+                break
         status[vid] = who
-    return render_template('index.html', vehicles=vehicles, status=status, role=current_user.role)
+        
+        if who == "Available":
+            available_count += 1
+        else:
+            assigned_count += 1
+    
+    return render_template('index.html', 
+                         vehicles=vehicles, 
+                         status=status, 
+                         role=current_user.role,
+                         available_count=available_count,
+                         assigned_count=assigned_count)
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
