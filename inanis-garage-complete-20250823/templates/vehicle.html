@@ -148,3 +148,97 @@
                     </div>
                 </div>
                 {% endif %}
+
+                <!-- Admin Only - Master Data Management -->
+                {% if role == "admin" %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.3s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-cogs me-2" style="color: var(--apple-red);"></i>
+                        Master Data Management
+                    </div>
+                    <div class="apple-card-body">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <a href="{{ url_for('edit_vehicle', car_id=v.reg_no) }}" class="apple-btn apple-btn-secondary w-100">
+                                    <i class="fas fa-edit me-1"></i>Edit Vehicle Details
+                                </a>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="button" class="apple-btn w-100" 
+                                        style="background: var(--apple-orange); color: white;"
+                                        onclick="alert('🚗 Car image refresh feature coming soon!')">
+                                    <i class="fas fa-image me-1"></i>Refresh Car Image
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <button type="button" class="apple-btn apple-btn-danger w-100" 
+                                        data-bs-toggle="modal" data-bs-target="#deleteVehicleModal">
+                                    <i class="fas fa-car me-1"></i>Mark as Sold
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <a href="{{ url_for('export_data') }}" class="apple-btn" 
+                                   style="background: var(--apple-purple); color: white;" 
+                                   class="w-100">
+                                    <i class="fas fa-download me-1"></i>Backup Data
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <small class="text-muted">
+                                <i class="fas fa-shield-alt me-1"></i>
+                                Admin-only master data operations
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delete/Sold Vehicle Modal -->
+                <div class="modal fade" id="deleteVehicleModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="deleteModalLabel">
+                                    <i class="fas fa-car me-2"></i>Vehicle Sale/Removal: {{ v.reg_no }}
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="mb-3">What would you like to do with <strong>{{ v.make }} {{ v.model }} ({{ v.reg_no }})</strong>?</p>
+                                <form method="POST" action="{{ url_for('delete_vehicle', car_id=v.reg_no) }}" id="deleteVehicleForm">
+                                    <div class="mb-3">
+                                        <div class="form-check p-3 mb-2" style="background: rgba(52, 199, 89, 0.1); border-radius: 8px; border: 1px solid rgba(52, 199, 89, 0.2);">
+                                            <input class="form-check-input" type="radio" name="reason" value="sold" id="soldRadio" checked>
+                                            <label class="form-check-label fw-bold" for="soldRadio">
+                                                <i class="fas fa-handshake me-2 text-success"></i>
+                                                <strong>Mark as SOLD</strong>
+                                                <br><small class="text-muted">Keep all records but mark as inactive. Can be restored later.</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check p-3" style="background: rgba(255, 59, 48, 0.1); border-radius: 8px; border: 1px solid rgba(255, 59, 48, 0.2);">
+                                            <input class="form-check-input" type="radio" name="reason" value="deleted" id="deleteRadio">
+                                            <label class="form-check-label fw-bold" for="deleteRadio">
+                                                <i class="fas fa-trash me-2 text-danger"></i>
+                                                <strong>Permanently DELETE</strong>
+                                                <br><small class="text-muted">Remove completely from system. This action cannot be undone!</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="fas fa-times me-1"></i>Cancel
+                                </button>
+                                <button type="submit" form="deleteVehicleForm" class="btn btn-danger">
+                                    <i class="fas fa-check me-1"></i>Confirm Action
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
