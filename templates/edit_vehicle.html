@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit {{ v.reg_no }} - Inanis Garage</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/apple-style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg apple-nav">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fas fa-wrench me-2"></i>Inanis Garage
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('vehicle', car_id=car_id) }}">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Vehicle
+                </a>
+                <a class="nav-link" href="{{ url_for('index') }}">
+                    <i class="fas fa-home me-1"></i>Dashboard
+                </a>
+                <a class="nav-link" href="{{ url_for('logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- Header Card -->
+                <div class="apple-card apple-fade-in mb-4">
+                    <div class="apple-card-header">
+                        <i class="fas fa-edit me-2" style="color: var(--apple-orange);"></i>
+                        Edit Vehicle: {{ v.reg_no }}
+                    </div>
+                    <div class="apple-card-body text-center">
+                        <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                             style="width: 100px; height: 100px; background: linear-gradient(135deg, var(--apple-orange), var(--apple-blue));">
+                            <i class="fas fa-edit fa-3x text-white"></i>
+                        </div>
+                        <h5 class="mb-1">Master Data Management</h5>
+                        <p class="text-muted mb-0">Update vehicle information and maintain accurate records</p>
+                    </div>
+                </div>
+
+                <!-- Edit Form Card -->
+                <div class="apple-card apple-slide-up">
+                    <div class="apple-card-header">
+                        <i class="fas fa-car me-2" style="color: var(--apple-blue);"></i>
+                        Vehicle Details
+                    </div>
+                    <div class="apple-card-body">
+                        <!-- Flash Messages -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="apple-alert apple-alert-{{ 'danger' if category == 'error' else 'success' }}">
+                                        <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2"></i>
+                                        {{ message }}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <form method="POST" class="apple-slide-up">
+                            <!-- Registration and Make Row -->
+                            <div class="row g-4 mb-4">
+                                <div class="col-md-6">
+                                    <label class="apple-form-label">
+                                        <i class="fas fa-id-card me-1"></i>Registration Number *
+                                    </label>
+                                    <input type="text" class="form-control apple-form-control" name="reg_no" required 
+                                           value="{{ v.reg_no }}" style="text-transform: uppercase;"
+                                           placeholder="e.g., KA51MU8795">
+                                    <div class="form-text">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Changing this will update all related records
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="apple-form-label">
+                                        <i class="fas fa-industry me-1"></i>Make *
+                                    </label>
+                                    <input type="text" class="form-control apple-form-control" name="make" required 
+                                           value="{{ v.make }}" placeholder="Toyota, Honda, Maruti">
+                                </div>
+                            </div>
+
+                            <!-- Model and Year Row -->
+                            <div class="row g-4 mb-4">
+                                <div class="col-md-6">
+                                    <label class="apple-form-label">
+                                        <i class="fas fa-car-side me-1"></i>Model *
+                                    </label>
+                                    <input type="text" class="form-control apple-form-control" name="model" required 
+                                           value="{{ v.model }}" placeholder="Camry, Civic, Swift">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="apple-form-label">
+                                        <i class="fas fa-calendar me-1"></i>Manufacturing Year *
+                                    </label>
+                                    <input type="number" class="form-control apple-form-control" name="year" required 
+                                           min="1900" max="2030" value="{{ v.year }}">
+                                </div>
+                            </div>
+
+                            <!-- Color and Odometer Row -->
+                            <div class="row g-4 mb-4">
+                                <div class="col-md-6">
+                                    <label class="apple-form-label">
+                                        <i class="fas fa-palette me-1"></i>Color
+                                    </label>
+                                    <input type="text" class="form-control apple-form-control" name="color" 
+                                           value="{{ v.color or '' }}" placeholder="White, Black, Silver">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="apple-form-label">
+                                        <i class="fas fa-tachometer-alt me-1"></i>Current Odometer (km) *
+                                    </label>
+                                    <input type="number" class="form-control apple-form-control" name="odo" required 
+                                           step="1" min="0" value="{{ v.odo|int }}">
+                                </div>
+                            </div>
+
+                            <!-- Vehicle Status -->
+                            <div class="mb-4">
+                                <label class="apple-form-label">
+                                    <i class="fas fa-info-circle me-1"></i>Vehicle Status
+                                </label>
+                                <select class="form-control apple-form-control" name="status">
+                                    <option value="active" {{ 'selected' if v.get('status', 'active') == 'active' else '' }}>
+                                        🟢 Active - Available for assignments
+                                    </option>
+                                    <option value="maintenance" {{ 'selected' if v.get('status') == 'maintenance' else '' }}>
+                                        🔧 Under Maintenance - Temporarily unavailable
+                                    </option>
+                                    <option value="sold" {{ 'selected' if v.get('status') == 'sold' else '' }}>
+                                        🏁 Sold - Archived vehicle
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Description -->
+                            <div class="mb-4">
+                                <label class="apple-form-label">
+                                    <i class="fas fa-sticky-note me-1"></i>Description & Notes
+                                </label>
+                                <textarea class="form-control apple-form-control" name="desc" rows="4"
+                                          placeholder="Vehicle condition, special features, maintenance notes...">{{ v.desc or '' }}</textarea>
+                            </div>
+
+                            <!-- Update Info -->
+                            {% if v.get('updated_date') %}
+                            <div class="alert" style="background: rgba(0,122,255,0.1); border: 1px solid rgba(0,122,255,0.2);">
+                                <small class="text-muted">
+                                    <i class="fas fa-history me-1"></i>
+                                    Last updated: {{ v.updated_date[:10] }} by {{ v.get('updated_by', 'Admin') }}
+                                </small>
+                            </div>
+                            {% endif %}
+
+                            <!-- Action Buttons -->
+                            <div class="d-flex justify-content-between mt-5">
+                                <a href="{{ url_for('vehicle', car_id=car_id) }}" class="apple-btn apple-btn-secondary">
+                                    <i class="fas fa-times me-1"></i>Cancel Changes
+                                </a>
+                                <button type="submit" class="apple-btn apple-btn-primary">
+                                    <i class="fas fa-save me-1"></i>Save Vehicle Updates
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Info Card -->
+                <div class="apple-card mt-4 apple-slide-up" style="animation-delay: 0.2s;">
+                    <div class="apple-card-body">
+                        <h6 class="mb-3">
+                            <i class="fas fa-info-circle me-2" style="color: var(--apple-blue);"></i>
+                            Master Data Update Information
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 style="color: var(--apple-green);">✅ What Updates:</h6>
+                                <ul class="list-unstyled">
+                                    <li class="mb-1"><i class="fas fa-check me-2 text-success"></i>Vehicle specifications</li>
+                                    <li class="mb-1"><i class="fas fa-check me-2 text-success"></i>Registration number (with data migration)</li>
+                                    <li class="mb-1"><i class="fas fa-check me-2 text-success"></i>Current odometer reading</li>
+                                    <li class="mb-1"><i class="fas fa-check me-2 text-success"></i>Vehicle status</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 style="color: var(--apple-orange);">🔄 What Stays:</h6>
+                                <ul class="list-unstyled">
+                                    <li class="mb-1"><i class="fas fa-link me-2 text-warning"></i>All fuel logs</li>
+                                    <li class="mb-1"><i class="fas fa-link me-2 text-warning"></i>All documents</li>
+                                    <li class="mb-1"><i class="fas fa-link me-2 text-warning"></i>Assignment history</li>
+                                    <li class="mb-1"><i class="fas fa-link me-2 text-warning"></i>Maintenance records</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Form enhancements
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-uppercase registration number
+            const regInput = document.querySelector('input[name="reg_no"]');
+            regInput.addEventListener('input', function() {
+                this.value = this.value.toUpperCase();
+            });
+
+            // Form submission loading state
+            document.querySelector('form').addEventListener('submit', function() {
+                const button = this.querySelector('button[type="submit"]');
+                button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving Changes...';
+                button.disabled = true;
+            });
+
+            // Status change confirmation
+            const statusSelect = document.querySelector('select[name="status"]');
+            const originalStatus = '{{ v.get("status", "active") }}';
+            statusSelect.addEventListener('change', function() {
+                if (this.value === 'sold' && originalStatus !== 'sold') {
+                    if (!confirm('Are you sure you want to mark this vehicle as SOLD? This will archive the vehicle.')) {
+                        this.value = originalStatus;
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
