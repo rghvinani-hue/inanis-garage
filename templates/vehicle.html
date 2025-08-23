@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ v.reg_no }} - Inanis Garage</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/apple-style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg apple-nav">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fas fa-wrench me-2"></i>Inanis Garage
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('index') }}">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Garage
+                </a>
+                <a class="nav-link" href="{{ url_for('logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="apple-alert apple-alert-{{ 'danger' if category == 'error' else ('warning' if category == 'warning' else 'success') }}">
+                        <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else ('exclamation-circle' if category == 'warning' else 'check-circle') }} me-2"></i>{{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Vehicle Header Card -->
+        <div class="apple-card apple-fade-in mb-4">
+            <div class="apple-card-header">
+                <i class="fas fa-car me-2" style="color: var(--apple-blue);"></i>
+                Vehicle Details: {{ v.reg_no }}
+            </div>
+            <div class="apple-card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="d-flex align-items-center mb-4">
+                            <div class="me-4">
+                                <div class="d-inline-flex align-items-center justify-content-center rounded-circle"
+                                     style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--apple-blue), var(--garage-accent));">
+                                    <i class="fas fa-car fa-2x text-white"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="mb-1 fw-bold" style="color: var(--apple-dark-gray);">{{ v.make }} {{ v.model }}</h3>
+                                <p class="mb-0 text-muted lead">Registration: {{ v.reg_no }}</p>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-sm-6 mb-3">
+                                <label class="text-muted small d-block">Manufacturing Year</label>
+                                <span class="fw-medium fs-5">{{ v.year }}</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <label class="text-muted small d-block">Color</label>
+                                <span class="fw-medium fs-5">{{ v.color or 'Not specified' }}</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <label class="text-muted small d-block">Current Odometer</label>
+                                <span class="fw-medium fs-5">
+                                    <i class="fas fa-tachometer-alt me-1" style="color: var(--apple-blue);"></i>
+                                    {{ "{:,}".format(v.odo|int) }} km
+                                </span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <label class="text-muted small d-block">Added to Garage</label>
+                                <span class="fw-medium fs-5">
+                                    <i class="fas fa-calendar me-1" style="color: var(--apple-green);"></i>
+                                    {{ v.created_date[:10] if v.created_date else 'Recently' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        {% if v.desc %}
+                        <div class="mt-3">
+                            <label class="text-muted small d-block">Description</label>
+                            <p class="mb-0">{{ v.desc }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="apple-card" style="background: linear-gradient(135deg, var(--apple-blue), var(--garage-accent)); color: white;">
+                            <div class="apple-card-body text-center">
+                                <i class="fas fa-info-circle fa-2x mb-3"></i>
+                                <h6 class="text-white">Vehicle Status</h6>
+                                <p class="mb-0">Ready for assignments and fuel logging</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column - Forms -->
+            <div class="col-lg-6">
+                <!-- Add Fuel Log -->
+                <div class="apple-card mb-4 apple-slide-up">
+                    <div class="apple-card-header">
+                        <i class="fas fa-gas-pump me-2" style="color: var(--apple-green);"></i>
+                        Add Fuel Log
+                    </div>
+                    <div class="apple-card-body">
+                        <form method="POST" action="{{ url_for('add_fuel', car_id=v.reg_no) }}">
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="apple-form-label">Previous Odometer</label>
+                                    <input type="number" class="form-control apple-form-control" name="prev_odo" 
+                                           value="{{ v.odo }}" required readonly>
+                                </div>
+                                <div class="col-6">
+                                    <label class="apple-form-label">Current Odometer *</label>
+                                    <input type="number" class="form-control apple-form-control" name="curr_odo" 
+                                           required min="{{ v.odo + 1 }}" placeholder="{{ v.odo + 100 }}">
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="apple-form-label">Fuel Liters *</label>
+                                    <input type="number" step="0.01" class="form-control apple-form-control" 
+                                           name="liters" required placeholder="45.50">
+                                </div>
+                                <div class="col-6">
+                                    <label class="apple-form-label">Date *</label>
+                                    <input type="date" class="form-control apple-form-control" name="date" 
+                                           required value="{{ moment().format('YYYY-MM-DD') }}">
+                                </div>
+                            </div>
+                            <button type="submit" class="apple-btn apple-btn-success w-100">
+                                <i class="fas fa-plus me-1"></i>Add Fuel Log
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Admin Only - Assign Driver -->
+                {% if role == "admin" %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.1s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-user-plus me-2" style="color: var(--apple-orange);"></i>
+                        Assign Driver
+                    </div>
+                    <div class="apple-card-body">
+                        <form method="POST" action="{{ url_for('assign_driver', car_id=v.reg_no) }}">
+                            <div class="mb-3">
+                                <label class="apple-form-label">Driver Name *</label>
+                                <input type="text" class="form-control apple-form-control" name="driver" 
+                                       placeholder="Enter driver name" required>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="apple-form-label">Start Date *</label>
+                                    <input type="date" class="form-control apple-form-control" name="start_date" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="apple-form-label">End Date *</label>
+                                    <input type="date" class="form-control apple-form-control" name="end_date" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="apple-btn apple-btn-primary w-100">
+                                <i class="fas fa-user-check me-1"></i>Assign Driver
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Right Column - History -->
+            <div class="col-lg-6">
+                <!-- Assignment History -->
+                {% if assignments %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.2s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-calendar-alt me-2" style="color: var(--apple-purple);"></i>
+                        Assignment History
+                    </div>
+                    <div class="apple-card-body">
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <thead>
+                                    <tr style="color: var(--apple-gray);">
+                                        <th>Driver</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for assignment in assignments %}
+                                    <tr>
+                                        <td class="fw-medium">
+                                            <i class="fas fa-user me-1" style="color: var(--apple-orange);"></i>
+                                            {{ assignment.driver }}
+                                        </td>
+                                        <td>{{ assignment.start_date }}</td>
+                                        <td>{{ assignment.end_date }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Fuel History -->
+                {% if flogs %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.3s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-gas-pump me-2" style="color: var(--apple-green);"></i>
+                        Recent Fuel History
+                    </div>
+                    <div class="apple-card-body">
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <thead>
+                                    <tr style="color: var(--apple-gray);">
+                                        <th>Date</th>
+                                        <th>Distance</th>
+                                        <th>Liters</th>
+                                        <th>Driver</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in flogs[-5:] %}
+                                    <tr>
+                                        <td>{{ log.date }}</td>
+                                        <td>
+                                            <span class="badge" style="background: var(--apple-light-gray); color: var(--apple-dark-gray);">
+                                                {{ (log.curr_odo - log.prev_odo)|int }} km
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <i class="fas fa-gas-pump me-1" style="color: var(--apple-green);"></i>
+                                            {{ log.liters }}L
+                                        </td>
+                                        <td class="fw-medium">{{ log.driver }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if flogs|length > 5 %}
+                        <div class="text-center mt-3">
+                            <small class="text-muted">Showing last 5 entries ({{ flogs|length }} total)</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.3s;">
+                    <div class="apple-card-body text-center py-5">
+                        <i class="fas fa-gas-pump fa-3x mb-3" style="color: var(--apple-gray); opacity: 0.3;"></i>
+                        <h6 style="color: var(--apple-gray);">No Fuel Logs Yet</h6>
+                        <p class="text-muted mb-0">Add the first fuel log to start tracking efficiency</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Documents -->
+                {% if docs %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.4s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-file-alt me-2" style="color: var(--apple-blue);"></i>
+                        Vehicle Documents
+                    </div>
+                    <div class="apple-card-body">
+                        {% for doc in docs %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <i class="fas fa-file-pdf me-2" style="color: var(--apple-red);"></i>
+                                <span class="fw-medium">{{ doc.type }}</span>
+                                {% if doc.expiry %}
+                                <small class="text-muted d-block">Expires: {{ doc.expiry }}</small>
+                                {% endif %}
+                            </div>
+                            {% if doc.drive_link %}
+                            <a href="{{ doc.drive_link }}" target="_blank" class="apple-btn apple-btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">
+                                <i class="fas fa-external-link-alt me-1"></i>View
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Back to Dashboard -->
+        <div class="text-center mt-4 mb-5">
+            <a href="{{ url_for('index') }}" class="apple-btn apple-btn-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Garage Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Set today's date as default for fuel log
+        document.querySelector('input[name="date"]').value = new Date().toISOString().split('T')[0];
+        
+        // Auto-calculate distance when odometer changes
+        const prevOdo = document.querySelector('input[name="prev_odo"]');
+        const currOdo = document.querySelector('input[name="curr_odo"]');
+        
+        if (currOdo) {
+            currOdo.addEventListener('input', function() {
+                const distance = this.value - prevOdo.value;
+                if (distance > 0) {
+                    console.log(`Distance: ${distance} km`);
+                }
+            });
+        }
+
+        // Apple-style form animations
+        document.querySelectorAll('.apple-form-control').forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.style.transform = 'translateY(-2px)';
+            });
+            input.addEventListener('blur', function() {
+                this.parentElement.style.transform = 'translateY(0)';
+            });
+        });
+    </script>
+</body>
+</html>
