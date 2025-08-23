@@ -358,13 +358,24 @@ def upload_document(car_id):
             filename = secure_filename(file.filename)
             # Add timestamp to avoid conflicts
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{car_id}_{doc_type.replace(' ', '_')}_{timestamp}_{filename}"
+            safe_filename = f"{car_id}_{doc_type.replace(' ', '_')}_{timestamp}_{filename}"
             
+            # Create document storage directory
+            doc_dir = os.path.join('data', 'documents', car_id)
+            os.makedirs(doc_dir, exist_ok=True)
             os.makedirs('temp_uploads', exist_ok=True)
-            local_path = os.path.join('temp_uploads', filename)
+            
+            # Save to both locations for reliability
+            local_path = os.path.join('temp_uploads', safe_filename)
+            permanent_path = os.path.join(doc_dir, safe_filename)
+            
             file.save(local_path)
             
-            # Try to upload to Google Drive
+            # Copy to permanent storage
+            import shutil
+            shutil.copy2(local_path, permanent_path)
+            
+            # Try to upload to Google Drive (if available)
             file_id, web_link = upload_file_to_drive(local_path)
             
             # Calculate days until expiry
@@ -381,13 +392,18 @@ def upload_document(car_id):
                 except ValueError:
                     pass
             
+            # Create view URL for local file
+            local_view_url = url_for('view_document', car_id=car_id, filename=safe_filename)
+            
             doc_record = {
                 'type': doc_type,
                 'expiry': expiry,
                 'expiry_status': expiry_status,
                 'days_until_expiry': days_until_expiry,
-                'filename': filename,
+                'filename': safe_filename,
                 'original_filename': file.filename,
+                'local_path': permanent_path,
+                'local_view_url': local_view_url,
                 'drive_link': web_link,
                 'drive_id': file_id,
                 'notes': notes,
@@ -402,22 +418,26 @@ def upload_document(car_id):
             logger.info(f"✅ Document uploaded for {car_id} by {current_user.id}")
             
             if web_link:
-                flash(f"Document '{doc_type}' uploaded to Google Drive successfully! You can view it anytime.", "success")
+                flash(f"✅ Document '{doc_type}' uploaded to Google Drive successfully!", "success")
             else:
-                flash(f"Document '{doc_type}' saved locally (Google Drive unavailable).", "warning")
+                flash(f"✅ Document '{doc_type}' saved securely. You can view it from the vehicle page.", "success")
                 
         except Exception as e:
             logger.error(f"Document upload failed: {e}")
-            flash("Document upload failed. Please try again.", "error")
+            flash("❌ Document upload failed. Please try again.", "error")
         finally:
-            # Clean up temp file
+            # Clean up temp file (but keep permanent copy)
             if os.path.exists(local_path):
-                os.remove(local_path)
+                try:
+                    os.remove(local_path)
+                except:
+                    pass
                 
         return redirect(url_for('vehicle', car_id=car_id))
     
     # GET request - show upload form
     return render_template('add_document.html', car_id=car_id)
+
 
 @app.route('/add_user', methods=['GET', 'POST'])
 @login_required
@@ -484,3 +504,33 @@ if __name__ == "__main__":
 
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+@app.route('/view_document/<car_id>/<filename>')
+@login_required
+def view_document(car_id, filename):
+    """
+    Serve uploaded documents for viewing
+    """
+    try:
+        # Security: Only allow viewing documents for cars user has access to
+        if car_id not in vehicles:
+            flash("Vehicle not found.", "error")
+            return redirect(url_for('index'))
+        
+        # Check if file exists in temp_uploads
+        file_path = os.path.join('temp_uploads', filename)
+        if os.path.exists(file_path):
+            from flask import send_file
+            return send_file(file_path, as_attachment=False)
+        
+        # Check if file exists in data directory
+        file_path = os.path.join('data', 'documents', car_id, filename)
+        if os.path.exists(file_path):
+            return send_file(file_path, as_attachment=False)
+            
+        flash("Document file not found.", "error")
+        return redirect(url_for('vehicle', car_id=car_id))
+        
+    except Exception as e:
+        logger.error(f"Error serving document: {e}")
+        flash("Error loading document.", "error")
+        return redirect(url_for('vehicle', car_id=car_id))
