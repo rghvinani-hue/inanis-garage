@@ -18,41 +18,86 @@
                 <a class="nav-link" href="{{ url_for('vehicle', car_id=car_id) }}">
                     <i class="fas fa-arrow-left me-1"></i>Back to Vehicle
                 </a>
+                <a class="nav-link" href="{{ url_for('logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>Logout
+                </a>
             </div>
         </div>
     </nav>
 
     <div class="container mt-4">
         <div class="row justify-content-center">
-            <div class="col-lg-6">
+            <div class="col-lg-8">
                 <div class="apple-card apple-fade-in">
                     <div class="apple-card-header">
                         <i class="fas fa-file-upload me-2" style="color: var(--apple-blue);"></i>
                         Upload Document for {{ car_id }}
                     </div>
                     <div class="apple-card-body">
-                        <form method="POST" enctype="multipart/form-data">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <!-- Flash Messages -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="apple-alert apple-alert-{{ 'danger' if category == 'error' else 'success' }}">
+                                        <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2"></i>
+                                        {{ message }}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
 
-                            <div class="mb-3">
-                                <label class="apple-form-label">Document Type</label>
-                                <select class="form-control apple-form-control apple-form-select" name="doc_type" required>
+                        <div class="text-center mb-4">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-circle"
+                                 style="width: 100px; height: 100px; background: linear-gradient(135deg, var(--apple-green), var(--apple-blue));">
+                                <i class="fas fa-file-upload fa-3x text-white"></i>
+                            </div>
+                        </div>
+
+                        <form method="POST" enctype="multipart/form-data" class="apple-slide-up">
+                            <div class="mb-4">
+                                <label class="apple-form-label">
+                                    <i class="fas fa-file-alt me-1"></i>Document Type *
+                                </label>
+                                <select class="form-control apple-form-control" name="doc_type" required id="docType">
                                     <option value="">Select Document Type</option>
-                                    <option value="Registration">Registration</option>
-                                    <option value="Insurance">Insurance</option>
-                                    <option value="Service Record">Service Record</option>
-                                    <option value="Other">Other</option>
+                                    <option value="RC Copy">RC Copy (Registration Certificate)</option>
+                                    <option value="Insurance">Insurance Policy</option>
+                                    <option value="Emission Test">Emission Test Certificate</option>
+                                    <option value="Service Record">Last Service Bill</option>
+                                    <option value="Fitness Certificate">Fitness Certificate</option>
+                                    <option value="Other">Other Document</option>
                                 </select>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="apple-form-label">Document File</label>
-                                <input type="file" class="form-control apple-form-control" name="doc_file" required>
+                            <div class="mb-4">
+                                <label class="apple-form-label">
+                                    <i class="fas fa-upload me-1"></i>Select Document File *
+                                </label>
+                                <input type="file" class="form-control apple-form-control" name="doc_file" required
+                                       accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Supported formats: PDF, JPG, PNG, DOC, DOCX (Max: 16MB)
+                                </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="apple-form-label">Expiry Date (Optional)</label>
-                                <input type="date" class="form-control apple-form-control" name="expiry">
+                            <div class="mb-4" id="expirySection" style="display: none;">
+                                <label class="apple-form-label">
+                                    <i class="fas fa-calendar-times me-1"></i>Expiry Date
+                                </label>
+                                <input type="date" class="form-control apple-form-control" name="expiry" id="expiryDate">
+                                <div class="form-text">
+                                    <i class="fas fa-bell me-1"></i>
+                                    You'll get alerts before this document expires
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="apple-form-label">
+                                    <i class="fas fa-sticky-note me-1"></i>Notes (Optional)
+                                </label>
+                                <textarea class="form-control apple-form-control" name="notes" rows="3" 
+                                          placeholder="Any additional notes about this document..."></textarea>
                             </div>
 
                             <div class="d-flex justify-content-between">
@@ -60,10 +105,52 @@
                                     <i class="fas fa-times me-1"></i>Cancel
                                 </a>
                                 <button type="submit" class="apple-btn apple-btn-primary">
-                                    <i class="fas fa-upload me-1"></i>Upload Document
+                                    <i class="fas fa-cloud-upload-alt me-1"></i>Upload to Google Drive
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+
+                <!-- Document Requirements Info -->
+                <div class="apple-card mt-4 apple-slide-up" style="animation-delay: 0.2s;">
+                    <div class="apple-card-body">
+                        <h6 class="mb-3">
+                            <i class="fas fa-info-circle me-2" style="color: var(--apple-blue);"></i>
+                            Document Requirements for {{ car_id }}
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 style="color: var(--apple-green);">Required Documents:</h6>
+                                <ul class="list-unstyled mb-0">
+                                    <li class="mb-1">
+                                        <i class="fas fa-file-alt me-2" style="color: var(--apple-blue);"></i>
+                                        <strong>RC Copy:</strong> Registration Certificate
+                                    </li>
+                                    <li class="mb-1">
+                                        <i class="fas fa-shield-alt me-2" style="color: var(--apple-green);"></i>
+                                        <strong>Insurance:</strong> Valid insurance policy (with expiry)
+                                    </li>
+                                    <li class="mb-1">
+                                        <i class="fas fa-leaf me-2" style="color: var(--apple-orange);"></i>
+                                        <strong>Emission Test:</strong> PUC certificate (with expiry)
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 style="color: var(--apple-orange);">Optional Documents:</h6>
+                                <ul class="list-unstyled mb-0">
+                                    <li class="mb-1">
+                                        <i class="fas fa-tools me-2" style="color: var(--apple-gray);"></i>
+                                        <strong>Service Record:</strong> Last service bill
+                                    </li>
+                                    <li class="mb-1">
+                                        <i class="fas fa-certificate me-2" style="color: var(--apple-purple);"></i>
+                                        <strong>Fitness Certificate:</strong> If required
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -71,5 +158,43 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Show/hide expiry date based on document type
+        const docType = document.getElementById('docType');
+        const expirySection = document.getElementById('expirySection');
+        const expiryDate = document.getElementById('expiryDate');
+
+        docType.addEventListener('change', function() {
+            const needsExpiry = ['Insurance', 'Emission Test', 'Fitness Certificate'];
+            
+            if (needsExpiry.includes(this.value)) {
+                expirySection.style.display = 'block';
+                expiryDate.required = true;
+            } else {
+                expirySection.style.display = 'none';
+                expiryDate.required = false;
+                expiryDate.value = '';
+            }
+        });
+
+        // Form submission loading state
+        document.querySelector('form').addEventListener('submit', function() {
+            const button = this.querySelector('button[type="submit"]');
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading to Google Drive...';
+            button.disabled = true;
+        });
+
+        // File validation
+        document.querySelector('input[type="file"]').addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const maxSize = 16 * 1024 * 1024; // 16MB
+                if (file.size > maxSize) {
+                    alert('File size must be less than 16MB');
+                    this.value = '';
+                }
+            }
+        });
+    </script>
 </body>
 </html>
