@@ -26,6 +26,7 @@
     </nav>
 
     <div class="container mt-4">
+        <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -78,7 +79,7 @@
                                 <label class="text-muted small d-block">Added to Garage</label>
                                 <span class="fw-medium fs-5">
                                     <i class="fas fa-calendar me-1" style="color: var(--apple-green);"></i>
-                                    {{ v.created_date[:10] if v.created_date else 'Recently' }}
+                                    Recently
                                 </span>
                             </div>
                         </div>
@@ -134,8 +135,7 @@
                                 </div>
                                 <div class="col-6">
                                     <label class="apple-form-label">Date *</label>
-                                    <input type="date" class="form-control apple-form-control" name="date" 
-                                           required value="{{ moment().format('YYYY-MM-DD') }}">
+                                    <input type="date" class="form-control apple-form-control" name="date" required>
                                 </div>
                             </div>
                             <button type="submit" class="apple-btn apple-btn-success w-100">
@@ -145,8 +145,9 @@
                     </div>
                 </div>
 
-                <!-- Admin Only - Assign Driver -->
+                <!-- Admin Only Section -->
                 {% if role == "admin" %}
+                <!-- Assign Driver -->
                 <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.1s;">
                     <div class="apple-card-header">
                         <i class="fas fa-user-plus me-2" style="color: var(--apple-orange);"></i>
@@ -175,42 +176,101 @@
                         </form>
                     </div>
                 </div>
+
+                <!-- Upload Documents -->
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.15s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-file-upload me-2" style="color: var(--apple-purple);"></i>
+                        Document Management
+                    </div>
+                    <div class="apple-card-body text-center">
+                        <i class="fas fa-cloud-upload-alt fa-2x mb-3" style="color: var(--apple-blue);"></i>
+                        <p class="mb-3">Upload RC, Insurance, Emission Test & other documents</p>
+                        <a href="{{ url_for('upload_document', car_id=v.reg_no) }}" class="apple-btn apple-btn-primary">
+                            <i class="fas fa-plus me-1"></i>Upload Document
+                        </a>
+                    </div>
+                </div>
                 {% endif %}
             </div>
 
             <!-- Right Column - History -->
             <div class="col-lg-6">
-                <!-- Assignment History -->
-                {% if assignments %}
+                <!-- Documents Display -->
+                {% if docs %}
                 <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.2s;">
                     <div class="apple-card-header">
-                        <i class="fas fa-calendar-alt me-2" style="color: var(--apple-purple);"></i>
-                        Assignment History
+                        <i class="fas fa-file-alt me-2" style="color: var(--apple-blue);"></i>
+                        Vehicle Documents ({{ docs|length }})
                     </div>
                     <div class="apple-card-body">
-                        <div class="table-responsive">
-                            <table class="table table-borderless">
-                                <thead>
-                                    <tr style="color: var(--apple-gray);">
-                                        <th>Driver</th>
-                                        <th>Start Date</th>
-                                        <th>End Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for assignment in assignments %}
-                                    <tr>
-                                        <td class="fw-medium">
-                                            <i class="fas fa-user me-1" style="color: var(--apple-orange);"></i>
-                                            {{ assignment.driver }}
-                                        </td>
-                                        <td>{{ assignment.start_date }}</td>
-                                        <td>{{ assignment.end_date }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                        {% for doc in docs %}
+                        <div class="document-item mb-3 p-3" style="background: rgba(255,255,255,0.5); border-radius: 12px; border-left: 4px solid var(--apple-blue);">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fas fa-file-pdf me-2" style="color: var(--apple-blue);"></i>
+                                        <span class="fw-bold">{{ doc.type }}</span>
+                                        {% if doc.get('expiry') %}
+                                        <span class="badge ms-2" style="background: var(--apple-orange); color: white;">
+                                            Expires: {{ doc.expiry }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-upload me-1"></i>
+                                            Uploaded recently
+                                            {% if doc.get('uploaded_by') %} by {{ doc.uploaded_by }}{% endif %}
+                                        </small>
+                                    </div>
+                                    
+                                    {% if doc.get('notes') %}
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-sticky-note me-1"></i>
+                                            {{ doc.notes }}
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="text-end">
+                                    {% if doc.get('drive_link') %}
+                                    <a href="{{ doc.drive_link }}" target="_blank" class="apple-btn apple-btn-primary mb-2" 
+                                       style="padding: 8px 16px; font-size: 0.85rem;">
+                                        <i class="fas fa-external-link-alt me-1"></i>View in Drive
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <div>
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-file me-1"></i>
+                                            {% if doc.get('original_filename') %}
+                                                {{ doc.original_filename }}
+                                            {% else %}
+                                                Document file
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.2s;">
+                    <div class="apple-card-body text-center py-5">
+                        <i class="fas fa-file-alt fa-3x mb-3" style="color: var(--apple-gray); opacity: 0.3;"></i>
+                        <h6 style="color: var(--apple-gray);">No Documents Uploaded</h6>
+                        <p class="text-muted mb-3">Upload important documents like RC, Insurance, Emission Test</p>
+                        {% if role == "admin" %}
+                        <a href="{{ url_for('upload_document', car_id=v.reg_no) }}" class="apple-btn apple-btn-primary">
+                            <i class="fas fa-plus me-1"></i>Upload First Document
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -252,11 +312,6 @@
                                 </tbody>
                             </table>
                         </div>
-                        {% if flogs|length > 5 %}
-                        <div class="text-center mt-3">
-                            <small class="text-muted">Showing last 5 entries ({{ flogs|length }} total)</small>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
                 {% else %}
@@ -269,156 +324,37 @@
                 </div>
                 {% endif %}
 
-                               <!-- Documents with Expiry Tracking -->
-                {% if docs %}
+                <!-- Assignment History -->
+                {% if assignments %}
                 <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.4s;">
                     <div class="apple-card-header">
-                        <i class="fas fa-file-alt me-2" style="color: var(--apple-blue);"></i>
-                        Vehicle Documents
-                        <span class="badge ms-2" style="background: var(--apple-green);">{{ docs|length }} files</span>
+                        <i class="fas fa-calendar-alt me-2" style="color: var(--apple-purple);"></i>
+                        Assignment History
                     </div>
                     <div class="apple-card-body">
-                        {% for doc in docs %}
-                        <div class="document-item mb-3 p-3" style="background: rgba(255,255,255,0.5); border-radius: 12px; border-left: 4px solid 
-                            {% if doc.expiry_status == 'expired' %}var(--apple-red)
-                            {% elif doc.expiry_status == 'expiring_soon' %}var(--apple-orange)
-                            {% else %}var(--apple-green){% endif %};">
-                            
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="flex-grow-1">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <i class="fas fa-file-pdf me-2" style="color: 
-                                            {% if doc.type == 'Insurance' %}var(--apple-green)
-                                            {% elif doc.type == 'Emission Test' %}var(--apple-orange)
-                                            {% elif doc.type == 'RC Copy' %}var(--apple-blue)
-                                            {% else %}var(--apple-gray){% endif %};"></i>
-                                        <span class="fw-bold">{{ doc.type }}</span>
-                                        
-                                        {% if doc.expiry %}
-                                        <span class="badge ms-2" style="background: 
-                                            {% if doc.expiry_status == 'expired' %}var(--apple-red)
-                                            {% elif doc.expiry_status == 'expiring_soon' %}var(--apple-orange)
-                                            {% else %}var(--apple-green){% endif %}; color: white;">
-                                            {% if doc.expiry_status == 'expired' %}
-                                                <i class="fas fa-exclamation-triangle me-1"></i>EXPIRED
-                                            {% elif doc.expiry_status == 'expiring_soon' %}
-                                                <i class="fas fa-clock me-1"></i>{{ doc.days_until_expiry }} days left
-                                            {% else %}
-                                                <i class="fas fa-check me-1"></i>Valid
-                                            {% endif %}
-                                        </span>
-                                        {% endif %}
-                                    </div>
-                                    
-                                    {% if doc.expiry %}
-                                    <div class="mb-2">
-                                        <small class="text-muted">
-                                            <i class="fas fa-calendar me-1"></i>
-                                            Expires: <strong>{{ doc.expiry }}</strong>
-                                            {% if doc.expiry_status == 'expired' %}
-                                                <span style="color: var(--apple-red); font-weight: bold;"> - RENEWAL REQUIRED!</span>
-                                            {% elif doc.expiry_status == 'expiring_soon' %}
-                                                <span style="color: var(--apple-orange); font-weight: bold;"> - Renewal Due Soon</span>
-                                            {% endif %}
-                                        </small>
-                                    </div>
-                                    {% endif %}
-                                    
-                                    <div class="mb-2">
-                                        <small class="text-muted">
-                                            <i class="fas fa-upload me-1"></i>
-                                            Uploaded: {{ doc.uploaded_date[:10] if doc.uploaded_date else 'Recently' }}
-                                            by {{ doc.uploaded_by or 'Admin' }}
-                                        </small>
-                                    </div>
-                                    
-                                    {% if doc.notes %}
-                                    <div class="mb-2">
-                                        <small class="text-muted">
-                                            <i class="fas fa-sticky-note me-1"></i>
-                                            {{ doc.notes }}
-                                        </small>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                                
-                                <div class="text-end">
-                                    {% if doc.drive_link %}
-                                    <a href="{{ doc.drive_link }}" target="_blank" class="apple-btn apple-btn-primary mb-2" 
-                                       style="padding: 8px 16px; font-size: 0.85rem;">
-                                        <i class="fas fa-external-link-alt me-1"></i>View in Drive
-                                    </a>
-                                    {% endif %}
-                                    
-                                    <div>
-                                        <small class="text-muted d-block">
-                                            <i class="fas fa-file me-1"></i>{{ doc.original_filename or doc.filename }}
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <thead>
+                                    <tr style="color: var(--apple-gray);">
+                                        <th>Driver</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for assignment in assignments %}
+                                    <tr>
+                                        <td class="fw-medium">
+                                            <i class="fas fa-user me-1" style="color: var(--apple-orange);"></i>
+                                            {{ assignment.driver }}
+                                        </td>
+                                        <td>{{ assignment.start_date }}</td>
+                                        <td>{{ assignment.end_date }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
-                        {% endfor %}
-                        
-                        <!-- Document Summary -->
-                        <div class="mt-3 p-3" style="background: rgba(0,122,255,0.1); border-radius: 12px;">
-                            <div class="row text-center">
-                                <div class="col-4">
-                                    <div class="fw-bold" style="color: var(--apple-green);">
-                                        {{ docs|selectattr('expiry_status', 'equalto', 'valid')|list|length }}
-                                    </div>
-                                    <small class="text-muted">Valid</small>
-                                </div>
-                                <div class="col-4">
-                                    <div class="fw-bold" style="color: var(--apple-orange);">
-                                        {{ docs|selectattr('expiry_status', 'equalto', 'expiring_soon')|list|length }}
-                                    </div>
-                                    <small class="text-muted">Expiring Soon</small>
-                                </div>
-                                <div class="col-4">
-                                    <div class="fw-bold" style="color: var(--apple-red);">
-                                        {{ docs|selectattr('expiry_status', 'equalto', 'expired')|list|length }}
-                                    </div>
-                                    <small class="text-muted">Expired</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                {% else %}
-                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.4s;">
-                    <div class="apple-card-body text-center py-5">
-                        <i class="fas fa-file-alt fa-3x mb-3" style="color: var(--apple-gray); opacity: 0.3;"></i>
-                        <h6 style="color: var(--apple-gray);">No Documents Uploaded</h6>
-                        <p class="text-muted mb-3">Upload important documents like RC, Insurance, Emission Test</p>
-                        {% if role == "admin" %}
-                        <a href="{{ url_for('upload_document', car_id=v.reg_no) }}" class="apple-btn apple-btn-primary">
-                            <i class="fas fa-plus me-1"></i>Upload First Document
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
-
-                    </div>
-                    <div class="apple-card-body">
-                        {% for doc in docs %}
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <i class="fas fa-file-pdf me-2" style="color: var(--apple-red);"></i>
-                                <span class="fw-medium">{{ doc.type }}</span>
-                                {% if doc.expiry %}
-                                <small class="text-muted d-block">Expires: {{ doc.expiry }}</small>
-                                {% endif %}
-                            </div>
-                            {% if doc.drive_link %}
-                            <a href="{{ doc.drive_link }}" target="_blank" class="apple-btn apple-btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">
-                                <i class="fas fa-external-link-alt me-1"></i>View
-                            </a>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
                     </div>
                 </div>
                 {% endif %}
@@ -437,29 +373,6 @@
     <script>
         // Set today's date as default for fuel log
         document.querySelector('input[name="date"]').value = new Date().toISOString().split('T')[0];
-        
-        // Auto-calculate distance when odometer changes
-        const prevOdo = document.querySelector('input[name="prev_odo"]');
-        const currOdo = document.querySelector('input[name="curr_odo"]');
-        
-        if (currOdo) {
-            currOdo.addEventListener('input', function() {
-                const distance = this.value - prevOdo.value;
-                if (distance > 0) {
-                    console.log(`Distance: ${distance} km`);
-                }
-            });
-        }
-
-        // Apple-style form animations
-        document.querySelectorAll('.apple-form-control').forEach(input => {
-            input.addEventListener('focus', function() {
-                this.parentElement.style.transform = 'translateY(-2px)';
-            });
-            input.addEventListener('blur', function() {
-                this.parentElement.style.transform = 'translateY(0)';
-            });
-        });
     </script>
 </body>
 </html>
