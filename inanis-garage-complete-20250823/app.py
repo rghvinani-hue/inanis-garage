@@ -778,3 +778,35 @@ def get_popular_indian_cars():
         'Renault': ['Kiger', 'Triber', 'Kwid'],
         'Nissan': ['Magnite', 'Kicks']
     }
+
+@app.route('/view_document/<car_id>/<filename>')
+@login_required
+def view_document(car_id, filename):
+    """
+    Serve uploaded documents for viewing
+    """
+    try:
+        # Security: Only allow viewing documents for cars user has access to
+        if car_id not in vehicles:
+            flash("Vehicle not found.", "error")
+            return redirect(url_for('index'))
+        
+        # Check if file exists in static/car_thumbnails (we're using this folder temporarily)
+        import os
+        file_path = os.path.join('static', 'car_thumbnails', filename)
+        if os.path.exists(file_path):
+            from flask import send_file
+            return send_file(file_path, as_attachment=False)
+        
+        # Check other possible locations
+        file_path = os.path.join('temp_uploads', filename)
+        if os.path.exists(file_path):
+            return send_file(file_path, as_attachment=False)
+            
+        flash("Document file not found.", "error")
+        return redirect(url_for('vehicle', car_id=car_id))
+        
+    except Exception as e:
+        logger.error(f"Error serving document: {e}")
+        flash("Error loading document.", "error")
+        return redirect(url_for('vehicle', car_id=car_id))
