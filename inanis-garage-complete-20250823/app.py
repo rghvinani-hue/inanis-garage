@@ -269,6 +269,107 @@ def add_vehicle():
         flash(f"Vehicle {vid} added to Inanis Garage!", "success")
         return redirect(url_for('index'))
     return render_template('add_vehicle.html')
+@app.route('/edit_vehicle/<car_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_vehicle(car_id):
+    """Edit vehicle master data - Admin only"""
+    if car_id not in vehicles:
+        flash("Vehicle not found in Inanis Garage.", "error")
+        return redirect(url_for('index'))
+    
+    v = vehicles[car_id]
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            old_reg = v['reg_no']
+            new_reg = request.form['reg_no'].strip().upper()
+            new_make = request.form['make'].strip()
+            new_model = request.form['model'].strip()
+            new_year = int(request.form['year'])
+            new_color = request.form['color'].strip()
+            new_odo = float(request.form['odo'])
+            new_desc = request.form['desc'].strip()
+            new_status = request.form.get('status', 'active')
+            
+            # Validation: If registration number changed, check if new one exists
+            if old_reg != new_reg and new_reg in vehicles:
+                flash(f"Registration number '{new_reg}' already exists in garage.", "error")
+                return render_template('edit_vehicle.html', v=v, car_id=car_id)
+            
+            # Update vehicle information
+            updated_vehicle = {
+                'make': new_make,
+                'model': new_model,
+                'year': new_year,
+                'reg_no': new_reg,
+                'color': new_color,
+                'odo': new_odo,
+                'desc': new_desc,
+                'status': new_status,
+                'created_date': v.get('created_date', datetime.now().isoformat()),
+                'updated_date': datetime.now().isoformat(),
+                'updated_by': current_user.id,
+                'garage': 'Inanis Garage',
+                'image_url': v.get('image_url'),  # Keep existing image
+                'image_fetched': v.get('image_fetched', False)
+            }
+            
+            # If registration number changed, we need to move all related data
+            if old_reg != new_reg:
+                logger.info(f"Registration change: {old_reg} → {new_reg}")
+                
+                # Update the main vehicles dictionary
+                vehicles[new_reg] = updated_vehicle
+                del vehicles[old_reg]
+                
+                # Update all assignments that reference this vehicle
+                for assignment in assignments:
+                    if assignment['car_id'] == old_reg:
+                        assignment['car_id'] = new_reg
+                        logger.info(f"Updated assignment: {assignment}")
+                
+                # Update fuel logs dictionary key
+                if old_reg in fuel_logs:
+                    fuel_logs[new_reg] = fuel_logs[old_reg]
+                    del fuel_logs[old_reg]
+                    logger.info(f"Moved fuel logs: {old_reg} → {new_reg}")
+                
+                # Update documents dictionary key
+                if old_reg in documents:
+                    documents[new_reg] = documents[old_reg]
+                    del documents[old_reg]
+                    logger.info(f"Moved documents: {old_reg} → {new_reg}")
+                
+                # Update maintenance records if they exist
+                if old_reg in maintenance_records:
+                    maintenance_records[new_reg] = maintenance_records[old_reg]
+                    del maintenance_records[old_reg]
+                    logger.info(f"Moved maintenance records: {old_reg} → {new_reg}")
+                
+                car_id = new_reg  # Update for redirect
+            else:
+                # Just update the existing vehicle
+                vehicles[car_id] = updated_vehicle
+            
+            # Save all changes
+            save_data()
+            
+            flash(f"✅ Vehicle {new_reg} updated successfully by {current_user.id}!", "success")
+            logger.info(f"Vehicle {new_reg} updated by {current_user.id}")
+            
+            return redirect(url_for('vehicle', car_id=car_id))
+            
+        except ValueError as e:
+            flash("❌ Please enter valid numbers for year and odometer.", "error")
+            logger.error(f"Vehicle update validation error: {e}")
+        except Exception as e:
+            logger.error(f"Vehicle update failed: {e}")
+            flash("❌ Vehicle update failed. Please try again.", "error")
+    
+    # GET request - show edit form
+    return render_template('edit_vehicle.html', v=v, car_id=car_id)
 
 @app.route('/vehicle/<car_id>')
 @login_required
