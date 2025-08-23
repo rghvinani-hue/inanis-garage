@@ -7,6 +7,34 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/apple-style.css') }}" rel="stylesheet">
+    <style>
+        /* Enhanced Statistics Cards */
+        .apple-stat-content {
+            padding: 1rem;
+        }
+
+        .apple-mini-stat {
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
+        }
+
+        .apple-mini-number {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--apple-dark-gray);
+            margin: 0.5rem 0;
+        }
+
+        .apple-mini-label {
+            font-size: 0.8rem;
+            color: var(--apple-gray);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg apple-nav">
@@ -36,7 +64,8 @@
             <p class="lead text-muted">Professional fleet management with Apple-inspired design</p>
         </div>
 
-                <div class="row mb-5">
+        <!-- Statistics Cards -->
+        <div class="row mb-5">
             <div class="col-md-4 mb-4">
                 <div class="apple-stat-card apple-slide-up">
                     <div class="apple-stat-icon"><i class="fas fa-car" style="color: var(--apple-blue);"></i></div>
@@ -81,7 +110,7 @@
             </div>
         </div>
 
-
+        <!-- Fleet Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h2 class="mb-1" style="color: var(--apple-dark-gray); font-weight: 700;">Garage Fleet</h2>
@@ -95,8 +124,19 @@
             {% endif %}
         </div>
 
-                              <!-- Car Thumbnail Display -->
-                        <div class="text-center mb-3">
+        <!-- Vehicle Cards -->
+        <div class="row">
+            {% for vid, v in vehicles.items() %}
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="apple-vehicle-card apple-slide-up" style="animation-delay: {{ loop.index0 * 0.1 }}s;">
+                    <!-- Status Badge -->
+                    <div class="apple-vehicle-status apple-status-{{ 'available' if status[vid] == 'Available' else 'assigned' }}">
+                        <i class="fas fa-{{ 'check' if status[vid] == 'Available' else 'user' }} me-1"></i>{{ status[vid] }}
+                    </div>
+                    
+                    <div class="p-4">
+                        <!-- 📸 Car Thumbnail Display -->
+                        <div class="text-center mb-4">
                             {% if v.get('thumbnail_url') %}
                             <!-- Custom Uploaded Thumbnail -->
                             <div class="car-thumbnail-container mb-2">
@@ -143,7 +183,7 @@
                             {% endif %}
                         </div>
 
-
+                        <!-- Vehicle Details -->
                         <div class="row mb-3">
                             <div class="col-6">
                                 <small class="text-muted d-block">Year</small>
@@ -151,7 +191,7 @@
                             </div>
                             <div class="col-6">
                                 <small class="text-muted d-block">Color</small>
-                                <span class="fw-medium">{{ v.color }}</span>
+                                <span class="fw-medium">{{ v.color or 'Not specified' }}</span>
                             </div>
                         </div>
 
@@ -163,10 +203,16 @@
                             </span>
                         </div>
 
-                        <div class="d-grid">
+                        <!-- Action Buttons -->
+                        <div class="d-grid gap-2">
                             <a href="{{ url_for('vehicle', car_id=vid) }}" class="apple-btn apple-btn-primary">
                                 <i class="fas fa-eye me-1"></i>View Details
                             </a>
+                            {% if role == "admin" %}
+                            <a href="{{ url_for('edit_vehicle', car_id=vid) }}" class="apple-btn apple-btn-secondary" style="font-size: 0.85rem; padding: 8px 12px;">
+                                <i class="fas fa-edit me-1"></i>Quick Edit
+                            </a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -174,6 +220,7 @@
             {% endfor %}
         </div>
 
+        <!-- No Vehicles Message -->
         {% if not vehicles %}
         <div class="text-center py-5 apple-fade-in">
             <i class="fas fa-wrench fa-4x mb-4" style="color: var(--apple-gray); opacity: 0.5;"></i>
@@ -187,6 +234,7 @@
         </div>
         {% endif %}
 
+        <!-- Footer -->
         <div class="text-center mt-5 py-4" style="border-top: 1px solid rgba(0,0,0,0.1);">
             <small class="text-muted">
                 <i class="fas fa-wrench me-2"></i>
