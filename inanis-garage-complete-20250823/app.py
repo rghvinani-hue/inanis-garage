@@ -223,32 +223,22 @@ def add_vehicle():
 @app.route('/vehicle/<car_id>')
 @login_required
 def vehicle(car_id):
-    v=vehicles.get(car_id)
-    if not v:flash("Not found","error");return redirect(url_for('index'))
-    docs=documents.get(car_id,[]);flogs=fuel_logs.get(car_id,[])
-    total_dist=sum(l.get('distance',l['curr_odo']-l['prev_odo']) for l in flogs)
-    total_lit=sum(l.get('liters',0) for l in flogs)
-    overall=round(total_dist/total_lit,2) if total_lit else None
-    return render_template('vehicle.html',v=v,docs=docs,flogs=flogs,overall_mileage=overall,role=current_user.role)
+    v = vehicles.get(car_id)
+    if not v:
+        flash("Vehicle not found.", "error")
+        return redirect(url_for('index'))
 
-@app.route('/add_fuel/<car_id>',methods=['POST'])
-@login_required
-def add_fuel(car_id):
-    if car_id not in vehicles:flash("Not found","error");return redirect(url_for('index'))
-    try:
-        prev,curr,lit=request.form['prev_odo'],request.form['curr_odo'],request.form['liters']
-        prev,curr,lit=float(prev),float(curr),float(lit)
-        if curr<=prev or lit<=0:raise ValueError
-        dist=curr-prev;eff=round(dist/lit,2)
-        log={"car_id":car_id,"prev_odo":prev,"curr_odo":curr,"distance":dist,
-             "liters":lit,"fuel_efficiency":eff,"date":request.form['date'],
-             "driver":current_user.id,"created_date":datetime.now().isoformat()}
-        fuel_logs.setdefault(car_id,[]).append(log)
-        vehicles[car_id]["odo"]=curr;save_data()
-        flash(f"Fuel log: {dist}km, {eff}km/L","success")
-    except:
-        flash("Fuel log error","error")
-    return redirect(url_for('vehicle',car_id=car_id))
+    docs = documents.get(car_id, [])
+    flogs = fuel_logs.get(car_id, [])
+
+    # Calculate overall average mileage
+    mileages = [log.get('fuel_efficiency') for log in flogs if log.get('fuel_efficiency')]
+    overall_avg_mileage = round(sum(mileages) / len(mileages), 2) if mileages else None
+
+    return render_template('vehicle.html', v=v, docs=docs, flogs=flogs,
+                           overall_avg_mileage=overall_avg_mileage,
+                           role=current_user.role)
+
 
 @app.route('/upload_document/<car_id>',methods=['GET','POST'])
 @login_required@admin_required
