@@ -490,99 +490,128 @@ def add_fuel(car_id):
 @login_required
 @admin_required
 def upload_document(car_id):
+    """
+    Upload vehicle documents with local storage and Google Drive backup
+    """
     if request.method == "POST":
         file = request.files.get('doc_file')
         doc_type = request.form.get('doc_type')
         expiry = request.form.get('expiry')
         notes = request.form.get('notes', '')
         
+        # Validation
         if not file or not file.filename:
-            flash("Please select a file to upload.", "error")
+            flash("❌ Please select a file to upload.", "error")
             return render_template('add_document.html', car_id=car_id)
         
         if not doc_type:
-            flash("Please select a document type.", "error")
+            flash("❌ Please select a document type.", "error")
             return render_template('add_document.html', car_id=car_id)
         
         try:
-            filename = secure_filename(file.filename)
-            # Add timestamp to avoid conflicts
+            # Create secure filename
+            original_filename = file.filename
+            filename = secure_filename(original_filename)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_filename = f"{car_id}_{doc_type.replace(' ', '_')}_{timestamp}_{filename}"
+            safe_filename = f"doc_{car_id}_{doc_type.replace(' ', '_')}_{timestamp}_{filename}"
             
-            # Create document storage directory
-            doc_dir = os.path.join('data', 'documents', car_id)
+            # Create documents directory (using static folder for web access)
+            doc_dir = os.path.join('static', 'documents')
             os.makedirs(doc_dir, exist_ok=True)
-            os.makedirs('temp_uploads', exist_ok=True)
             
-            # Save to both locations for reliability
-            local_path = os.path.join('temp_uploads', safe_filename)
-            permanent_path = os.path.join(doc_dir, safe_filename)
+            # Save file locally
+            file_path = os.path.join(doc_dir, safe_filename)
+            file.save(file_path)
             
-            file.save(local_path)
+            # Create web-accessible URL
+            document_url = url_for('static', filename=f'documents/{safe_filename}')
             
-            # Copy to permanent storage
-            import shutil
-            shutil.copy2(local_path, permanent_path)
-            
-            # Try to upload to Google Drive (if available)
-            file_id, web_link = upload_file_to_drive(local_path)
-            
-            # Calculate days until expiry
+            # Calculate expiry status
             days_until_expiry = None
             expiry_status = "valid"
+            expiry_alert = ""
+            
             if expiry:
                 try:
                     expiry_date = datetime.strptime(expiry, '%Y-%m-%d').date()
-                    days_until_expiry = (expiry_date - datetime.now().date()).days
+                    today_date = datetime.now().date()
+                    days_until_expiry = (expiry_date - today_date).days
+                    
                     if days_until_expiry < 0:
                         expiry_status = "expired"
+                        expiry_alert = f"⚠️ EXPIRED {abs(days_until_expiry)} days ago"
+                    elif days_until_expiry <= 7:
+                        expiry_status = "expiring_soon"
+                        expiry_alert = f"⚠️ Expires in {days_until_expiry} days"
                     elif days_until_expiry <= 30:
                         expiry_status = "expiring_soon"
+                        expiry_alert = f"📅 Expires in {days_until_expiry} days"
+                    else:
+                        expiry_alert = f"✅ Valid for {days_until_expiry} days"
+                        
                 except ValueError:
-                    pass
+                    logger.warning(f"Invalid expiry date format: {expiry}")
             
-            # Create view URL for local file
-            local_view_url = url_for('view_document', car_id=car_id, filename=safe_filename)
+            # Try Google Drive upload (optional)
+            drive_link = None
+            drive_id = None
+            storage_location = "Local Storage"
             
+            try:
+                # Attempt Google Drive upload
+                drive_result = upload_file_to_drive(file_path)
+                if drive_result and len(drive_result) == 2:
+                    drive_id, drive_link = drive_result
+                    storage_location = "Google Drive + Local Backup"
+                    logger.info(f"✅ Document uploaded to Google Drive: {safe_filename}")
+            except Exception as e:
+                logger.warning(f"Google Drive upload failed: {e}")
+                # Continue with local storage
+            
+            # Create document record
             doc_record = {
+                'id': f"doc_{timestamp}_{car_id}",
                 'type': doc_type,
                 'expiry': expiry,
                 'expiry_status': expiry_status,
                 'days_until_expiry': days_until_expiry,
+                'expiry_alert': expiry_alert,
                 'filename': safe_filename,
-                'original_filename': file.filename,
-                'local_path': permanent_path,
-                'local_view_url': local_view_url,
-                'drive_link': web_link,
-                'drive_id': file_id,
+                'original_filename': original_filename,
+                'file_path': file_path,
+                'document_url': document_url,  # Direct URL to file
+                'drive_link': drive_link,
+                'drive_id': drive_id,
+                'storage_location': storage_location,
                 'notes': notes,
                 'uploaded_date': datetime.now().isoformat(),
                 'uploaded_by': current_user.id,
+                'file_size': os.path.getsize(file_path),
                 'garage': 'Inanis Garage'
             }
             
-            documents.setdefault(car_id, []).append(doc_record)
+            # Store in documents database
+            if car_id not in documents:
+                documents[car_id] = []
+            documents[car_id].append(doc_record)
+            
+            # Save data
             save_data()
             
-            logger.info(f"✅ Document uploaded for {car_id} by {current_user.id}")
+            # Success message with details
+            success_msg = f"✅ Document '{doc_type}' uploaded successfully!"
+            if expiry_alert:
+                success_msg += f" {expiry_alert}"
+            if drive_link:
+                success_msg += " (Backed up to Google Drive)"
+                
+            flash(success_msg, "success")
+            logger.info(f"✅ Document uploaded: {car_id}/{safe_filename} by {current_user.id}")
             
-            if web_link:
-                flash(f"✅ Document '{doc_type}' uploaded to Google Drive successfully!", "success")
-            else:
-                flash(f"✅ Document '{doc_type}' saved securely. You can view it from the vehicle page.", "success")
-                
         except Exception as e:
-            logger.error(f"Document upload failed: {e}")
-            flash("❌ Document upload failed. Please try again.", "error")
-        finally:
-            # Clean up temp file (but keep permanent copy)
-            if os.path.exists(local_path):
-                try:
-                    os.remove(local_path)
-                except:
-                    pass
-                
+            logger.error(f"❌ Document upload failed: {e}")
+            flash(f"❌ Document upload failed: {str(e)}", "error")
+        
         return redirect(url_for('vehicle', car_id=car_id))
     
     # GET request - show upload form
