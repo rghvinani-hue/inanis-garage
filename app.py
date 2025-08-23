@@ -33,7 +33,7 @@ app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # CSRF Protection
-csrf = CSRFProtect(app)
+#csrf = CSRFProtect(app)
 
 # Login manager
 login_manager = LoginManager()
