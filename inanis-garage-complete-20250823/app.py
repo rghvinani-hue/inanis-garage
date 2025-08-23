@@ -635,3 +635,97 @@ def view_document(car_id, filename):
         logger.error(f"Error serving document: {e}")
         flash("Error loading document.", "error")
         return redirect(url_for('vehicle', car_id=car_id))
+def get_indian_car_icon(make, model, year, color=""):
+    """
+    Get car icon URL for Indian vehicles - 100% FREE
+    """
+    make_lower = make.lower().replace(' ', '').replace('-', '')
+    
+    # Indian Car Brand Logos (Free CDN links)
+    indian_car_logos = {
+        'maruti': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
+        'marutisuzuki': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
+        'suzuki': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
+        'tata': 'https://logos-world.net/wp-content/uploads/2021/03/Tata-Logo.png',
+        'mahindra': 'https://logos-world.net/wp-content/uploads/2021/03/Mahindra-Logo.png',
+        'hyundai': 'https://logos-world.net/wp-content/uploads/2021/03/Hyundai-Logo.png',
+        'honda': 'https://logos-world.net/wp-content/uploads/2021/03/Honda-Logo.png',
+        'toyota': 'https://logos-world.net/wp-content/uploads/2021/03/Toyota-Logo.png',
+        'kia': 'https://logos-world.net/wp-content/uploads/2021/03/Kia-Logo.png',
+        'mg': 'https://logos-world.net/wp-content/uploads/2021/08/MG-Logo.png',
+        'renault': 'https://logos-world.net/wp-content/uploads/2021/03/Renault-Logo.png',
+        'nissan': 'https://logos-world.net/wp-content/uploads/2021/03/Nissan-Logo.png',
+        'ford': 'https://logos-world.net/wp-content/uploads/2021/03/Ford-Logo.png',
+        'volkswagen': 'https://logos-world.net/wp-content/uploads/2021/03/Volkswagen-Logo.png',
+        'skoda': 'https://logos-world.net/wp-content/uploads/2021/03/Skoda-Logo.png',
+        'bmw': 'https://logos-world.net/wp-content/uploads/2021/03/BMW-Logo.png',
+        'mercedes': 'https://logos-world.net/wp-content/uploads/2021/03/Mercedes-Benz-Logo.png',
+        'audi': 'https://logos-world.net/wp-content/uploads/2021/03/Audi-Logo.png',
+        'jeep': 'https://logos-world.net/wp-content/uploads/2021/03/Jeep-Logo.png',
+        'datsun': 'https://1000logos.net/wp-content/uploads/2018/03/Datsun-Logo.png',
+    }
+    
+    # Try to get brand logo first
+    brand_logo = indian_car_logos.get(make_lower)
+    if brand_logo:
+        return {
+            'type': 'logo',
+            'url': brand_logo,
+            'alt': f"{make} Logo"
+        }
+    
+    # Fallback: Create custom placeholder with Indian car info
+    return get_indian_car_placeholder(make, model, year, color)
+
+def get_indian_car_placeholder(make, model, year, color):
+    """
+    Create custom placeholder for Indian cars
+    """
+    # Color mapping for Indian preferences
+    color_codes = {
+        'white': 'F8F9FA',
+        'black': '212529', 
+        'silver': 'ADB5BD',
+        'gray': '6C757D',
+        'grey': '6C757D',
+        'red': 'DC3545',
+        'blue': '0D6EFD',
+        'green': '198754',
+        'yellow': 'FFC107',
+        'brown': '795548',
+        'orange': 'FD7E14',
+        'pearl': 'E9ECEF',
+        'maroon': '800020'
+    }
+    
+    bg_color = color_codes.get(color.lower(), '007AFF')  # Default Apple blue
+    text_color = 'FFFFFF' if bg_color in ['212529', '6C757D', '800020', 'DC3545', '198754'] else '000000'
+    
+    # Create abbreviated text
+    car_text = f"{make[:3]}{model[:3]}".upper()
+    if len(car_text) > 6:
+        car_text = car_text[:6]
+    
+    placeholder_url = f"https://via.placeholder.com/300x200/{bg_color}/{text_color}?text={car_text}"
+    
+    return {
+        'type': 'placeholder',
+        'url': placeholder_url,
+        'alt': f"{make} {model} {year}"
+    }
+
+def get_popular_indian_cars():
+    """
+    Popular Indian car models for suggestions
+    """
+    return {
+        'Maruti Suzuki': ['Swift', 'Baleno', 'Wagon R', 'Alto', 'Vitara Brezza', 'Ertiga', 'Dzire', 'Ciaz'],
+        'Tata': ['Nexon', 'Harrier', 'Safari', 'Altroz', 'Tigor', 'Tiago', 'Punch'],
+        'Hyundai': ['Creta', 'i20', 'Venue', 'Verna', 'Santro', 'Grand i10'],
+        'Mahindra': ['XUV700', 'XUV300', 'Scorpio', 'Bolero', 'Thar', 'Marazzo'],
+        'Honda': ['City', 'Amaze', 'WR-V', 'Jazz'],
+        'Toyota': ['Innova Crysta', 'Fortuner', 'Glanza', 'Urban Cruiser'],
+        'Kia': ['Seltos', 'Sonet', 'Carens'],
+        'Renault': ['Kiger', 'Triber', 'Kwid'],
+        'Nissan': ['Magnite', 'Kicks']
+    }
