@@ -253,22 +253,70 @@ def add_vehicle():
         if vid in vehicles:
             flash("Vehicle already exists in Inanis Garage.", "error")
             return render_template('add_vehicle.html')
-
+        
+        # Get form data
+        make = request.form['make'].strip()
+        model = request.form['model'].strip()
+        year = int(request.form['year'])
+        color = request.form['color'].strip()
+        
+        # Handle car thumbnail upload
+        thumbnail_url = None
+        thumbnail_filename = None
+        
+        car_thumbnail = request.files.get('car_thumbnail')
+        if car_thumbnail and car_thumbnail.filename:
+            try:
+                # Secure filename
+                filename = secure_filename(car_thumbnail.filename)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                thumbnail_filename = f"car_{vid}_{timestamp}_{filename}"
+                
+                # Create thumbnails directory
+                thumbnails_dir = os.path.join('static', 'car_thumbnails')
+                os.makedirs(thumbnails_dir, exist_ok=True)
+                
+                # Save file
+                thumbnail_path = os.path.join(thumbnails_dir, thumbnail_filename)
+                car_thumbnail.save(thumbnail_path)
+                
+                # Generate URL for accessing the image
+                thumbnail_url = url_for('static', filename=f'car_thumbnails/{thumbnail_filename}')
+                
+                logger.info(f"✅ Thumbnail saved: {thumbnail_filename}")
+                
+            except Exception as e:
+                logger.error(f"Thumbnail upload failed: {e}")
+                flash("⚠️ Car thumbnail upload failed, but vehicle was added successfully.", "warning")
+        
         vehicles[vid] = {
-            "make": request.form['make'].strip(),
-            "model": request.form['model'].strip(),
-            "year": int(request.form['year']),
+            "make": make,
+            "model": model,
+            "year": year,
             "reg_no": vid,
-            "color": request.form['color'].strip(),
+            "color": color,
             "odo": float(request.form['odo']),
             "desc": request.form['desc'].strip(),
             "created_date": datetime.now().isoformat(),
-            "garage": "Inanis Garage"
+            "garage": "Inanis Garage",
+            # 📸 Store thumbnail information
+            "thumbnail_url": thumbnail_url,
+            "thumbnail_filename": thumbnail_filename,
+            "has_custom_image": thumbnail_url is not None
         }
         save_data()
-        flash(f"Vehicle {vid} added to Inanis Garage!", "success")
+        
+        success_msg = f"✅ Vehicle {vid} added to Inanis Garage!"
+        if thumbnail_url:
+            success_msg += " Car thumbnail uploaded successfully!"
+            
+        flash(success_msg, "success")
+        logger.info(f"Vehicle {vid} added by {current_user.id} with thumbnail: {bool(thumbnail_url)}")
         return redirect(url_for('index'))
+    
     return render_template('add_vehicle.html')
+
+
 @app.route('/edit_vehicle/<car_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
