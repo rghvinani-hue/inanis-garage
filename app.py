@@ -1,0 +1,405 @@
+import os
+import json
+import pickle
+from datetime import datetime, timedelta
+from functools import wraps
+import secrets
+import logging
+
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_wtf.csrf import CSRFProtect
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+
+# Google integration (optional)
+try:
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    from googleapiclient.errors import HttpError
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
+    print("⚠️  Google libraries not installed. Google integration disabled.")
+
+# Configure logging
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+# CSRF Protection
+csrf = CSRFProtect(app)
+
+# Login manager
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+# Data storage
+DATA_DIR = 'data'
+os.makedirs(DATA_DIR, exist_ok=True)
+DATA_FILE = os.path.join(DATA_DIR, 'inanis_garage_data.pickle')
+
+# Google configuration
+SERVICE_ACCOUNT_FILE = os.environ.get('GOOGLE_CREDENTIALS', 'credentials.json')
+CALENDAR_ID = os.environ.get('CALENDAR_ID', 'primary')
+
+# Global data
+users = {}
+vehicles = {}
+assignments = []
+fuel_logs = {}
+documents = {}
+maintenance_records = {}
+
+# Google services
+driveservice = None
+calservice = None
+google_enabled = False
+
+def init_google_services():
+    global driveservice, calservice, google_enabled
+    if not GOOGLE_AVAILABLE or not os.path.exists(SERVICE_ACCOUNT_FILE):
+        return False
+    try:
+        credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE)
+        driveservice = build('drive', 'v3', credentials=credentials)
+        calservice = build('calendar', 'v3', credentials=credentials)
+        google_enabled = True
+        logger.info("✅ Google services initialized for Inanis Garage")
+        return True
+    except Exception as e:
+        logger.error(f"Google initialization failed: {e}")
+        return False
+
+def load_data():
+    global users, vehicles, assignments, fuel_logs, documents, maintenance_records
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, 'rb') as f:
+                data = pickle.load(f)
+                users = data.get('users', {})
+                vehicles = data.get('vehicles', {})
+                assignments = data.get('assignments', [])
+                fuel_logs = data.get('fuel_logs', {})
+                documents = data.get('documents', {})
+                maintenance_records = data.get('maintenance_records', {})
+        except Exception as e:
+            logger.error(f"Failed to load data: {e}")
+
+    # Initialize admin user if no users exist
+    if not users:
+        users = {
+            "admin": {
+                "password": generate_password_hash("adminpass"), 
+                "role": "admin",
+                "created_date": datetime.now().isoformat(),
+                "garage_name": "Inanis Garage"
+            }
+        }
+        save_data()
+
+def save_data():
+    try:
+        data = {
+            'users': users,
+            'vehicles': vehicles, 
+            'assignments': assignments,
+            'fuel_logs': fuel_logs,
+            'documents': documents,
+            'maintenance_records': maintenance_records,
+            'garage_info': {
+                'name': 'Inanis Garage',
+                'version': '2.0.0',
+                'last_updated': datetime.now().isoformat()
+            }
+        }
+        with open(DATA_FILE, 'wb') as f:
+            pickle.dump(data, f)
+    except Exception as e:
+        logger.error(f"Failed to save data: {e}")
+
+class User(UserMixin):
+    def __init__(self, username, role):
+        self.id = username
+        self.role = role
+
+@login_manager.user_loader
+def load_user(username):
+    user = users.get(username)
+    if user:
+        return User(username, user["role"])
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != "admin":
+            flash("Admin access required for Inanis Garage operations.", "error")
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def upload_file_to_drive(file_path):
+    if not google_enabled or not driveservice:
+        return None, None
+    try:
+        file_metadata = {"name": f"InanisGarage_{os.path.basename(file_path)}"}
+        media = MediaFileUpload(file_path, resumable=True)
+        file = driveservice.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        return file.get('id'), file.get('webViewLink')
+    except Exception as e:
+        logger.error(f"Drive upload failed: {e}")
+        return None, None
+
+def create_calendar_event(summary, description, start_date, end_date):
+    if not google_enabled or not calservice:
+        return None
+    try:
+        event = {
+            'summary': f"[Inanis Garage] {summary}",
+            'description': f"{description}\n\nManaged by Inanis Garage System",
+            'start': {'date': start_date},
+            'end': {'date': end_date},
+        }
+        event = calservice.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+        return event.get('htmlLink')
+    except Exception as e:
+        logger.error(f"Calendar event failed: {e}")
+        return None
+
+# Routes
+@app.route('/')
+@login_required
+def index():
+    status = {}
+    today = datetime.today().strftime("%Y-%m-%d")
+    for vid, v in vehicles.items():
+        who = "Available"
+        for a in assignments:
+            if a["car_id"] == vid and a["start_date"] <= today <= a["end_date"]:
+                who = a["driver"]
+        status[vid] = who
+    return render_template('index.html', vehicles=vehicles, status=status, role=current_user.role)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        uname = request.form['username']
+        pwd = request.form['password']
+        user = users.get(uname)
+        if user and check_password_hash(user["password"], pwd):
+            login_user(User(uname, user['role']))
+            flash(f"Welcome to Inanis Garage, {uname}!", "success")
+            return redirect(url_for('index'))
+        else:
+            flash("Invalid username or password for Inanis Garage access.", "error")
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash("You have been logged out from Inanis Garage.", "success")
+    return redirect(url_for('login'))
+
+@app.route('/add_vehicle', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def add_vehicle():
+    if request.method == 'POST':
+        vid = request.form['reg_no'].strip().upper()
+        if vid in vehicles:
+            flash("Vehicle already exists in Inanis Garage.", "error")
+            return render_template('add_vehicle.html')
+
+        vehicles[vid] = {
+            "make": request.form['make'].strip(),
+            "model": request.form['model'].strip(),
+            "year": int(request.form['year']),
+            "reg_no": vid,
+            "color": request.form['color'].strip(),
+            "odo": float(request.form['odo']),
+            "desc": request.form['desc'].strip(),
+            "created_date": datetime.now().isoformat(),
+            "garage": "Inanis Garage"
+        }
+        save_data()
+        flash(f"Vehicle {vid} added to Inanis Garage!", "success")
+        return redirect(url_for('index'))
+    return render_template('add_vehicle.html')
+
+@app.route('/vehicle/<car_id>')
+@login_required
+def vehicle(car_id):
+    v = vehicles.get(car_id)
+    if not v:
+        flash("Vehicle not found in Inanis Garage.", "error")
+        return redirect(url_for('index'))
+
+    docs = documents.get(car_id, [])
+    flogs = fuel_logs.get(car_id, [])
+    assigned = [a for a in assignments if a["car_id"] == car_id]
+    maintenance = maintenance_records.get(car_id, [])
+
+    return render_template('vehicle.html', v=v, docs=docs, flogs=flogs, 
+                         assignments=assigned, maintenance=maintenance, role=current_user.role)
+
+@app.route('/assign_driver/<car_id>', methods=['POST'])
+@login_required
+@admin_required
+def assign_driver(car_id):
+    driver = request.form['driver'].strip()
+    start_date = request.form['start_date']
+    end_date = request.form['end_date']
+
+    assignment = {
+        "car_id": car_id, "driver": driver, "start_date": start_date, "end_date": end_date,
+        "assigned_by": current_user.id, "garage": "Inanis Garage"
+    }
+    assignments.append(assignment)
+
+    event_link = create_calendar_event(
+        summary=f"Vehicle {car_id} assigned to {driver}",
+        description=f"Vehicle assignment from Inanis Garage",
+        start_date=start_date, end_date=end_date
+    )
+
+    save_data()
+    if event_link:
+        flash("Driver assigned! Calendar event created.", "success")
+    else:
+        flash("Driver assigned successfully in Inanis Garage!", "success")
+    return redirect(url_for('vehicle', car_id=car_id))
+
+@app.route('/add_fuel/<car_id>', methods=['POST'])
+@login_required
+def add_fuel(car_id):
+    try:
+        prev = float(request.form['prev_odo'])
+        curr = float(request.form['curr_odo'])
+        liters = float(request.form['liters'])
+        cost = float(request.form.get('cost', 0))
+
+        log = {
+            "date": request.form['date'],
+            "prev_odo": prev, "curr_odo": curr,
+            "liters": liters, "cost": cost,
+            "driver": current_user.id
+        }
+        fuel_logs.setdefault(car_id, []).append(log)
+        vehicles[car_id]["odo"] = curr
+        save_data()
+        flash(f"Fuel log added for {car_id}", "success")
+    except ValueError:
+        flash("Please enter valid numbers.", "error")
+    return redirect(url_for('vehicle', car_id=car_id))
+
+@app.route('/upload_document/<car_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def upload_document(car_id):
+    if request.method == "POST":
+        file = request.files['doc_file']
+        doc_type = request.form['doc_type']
+        expiry = request.form.get('expiry')
+
+        if file and file.filename:
+            filename = secure_filename(file.filename)
+            os.makedirs('temp_uploads', exist_ok=True)
+            local_path = os.path.join('temp_uploads', filename)
+
+            try:
+                file.save(local_path)
+                file_id, web_link = upload_file_to_drive(local_path)
+
+                doc_record = {
+                    'type': doc_type, 'expiry': expiry, 'filename': filename,
+                    'drive_link': web_link, 'drive_id': file_id,
+                    'uploaded_date': datetime.now().isoformat()
+                }
+                documents.setdefault(car_id, []).append(doc_record)
+                save_data()
+
+                if web_link:
+                    flash("Document uploaded to Google Drive!", "success")
+                else:
+                    flash("Document saved locally.", "warning")
+            except Exception as e:
+                flash("Upload failed.", "error")
+            finally:
+                if os.path.exists(local_path):
+                    os.remove(local_path)
+        return redirect(url_for('vehicle', car_id=car_id))
+
+    return render_template('add_document.html', car_id=car_id)
+
+@app.route('/add_user', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def add_user():
+    if request.method == 'POST':
+        uname = request.form['username'].strip()
+        pwd = request.form['password']
+        role = request.form['role']
+
+        if uname in users:
+            flash("Username already exists.", "error")
+            return render_template('add_user.html')
+
+        users[uname] = {
+            "password": generate_password_hash(pwd),
+            "role": role,
+            "created_date": datetime.now().isoformat()
+        }
+        save_data()
+        flash(f"User {uname} added to Inanis Garage!", "success")
+        return redirect(url_for('index'))
+
+    return render_template('add_user.html')
+
+@app.route('/update_driver_license/<username>', methods=['GET', 'POST'])
+@login_required
+def update_driver_license(username):
+    if current_user.role != "admin" and current_user.id != username:
+        flash("You cannot update this profile.", "error")
+        return redirect(url_for('index'))
+
+    user = users.get(username)
+    if not user or user['role'] != 'driver':
+        flash("Driver not found.", "error")
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        license_num = request.form['license_number']
+        license_doc_link = request.form['license_doc_link']
+
+        user['license_number'] = license_num
+        user['license_doc_link'] = license_doc_link
+        save_data()
+        flash("Driver license info updated!", "success")
+        return redirect(url_for('index'))
+
+    return render_template('update_driver_license.html', user=user, username=username)
+
+if __name__ == "__main__":
+    os.makedirs('temp_uploads', exist_ok=True)
+    os.makedirs('static/css', exist_ok=True)
+    os.makedirs('templates', exist_ok=True)
+
+    init_google_services()
+    load_data()
+
+    print("🔧 Inanis Garage Management System Starting...")
+    print(f"📊 Google Integration: {'✅ Enabled' if google_enabled else '❌ Disabled'}")
+    print(f"👥 Users: {len(users)}")
+    print(f"🚙 Vehicles: {len(vehicles)}")
+    print("🌐 Access: http://localhost:5000")
+    print("🚗 Welcome to Inanis Garage!")
+
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
