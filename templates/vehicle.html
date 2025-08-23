@@ -269,12 +269,138 @@
                 </div>
                 {% endif %}
 
-                <!-- Documents -->
+                               <!-- Documents with Expiry Tracking -->
                 {% if docs %}
                 <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.4s;">
                     <div class="apple-card-header">
                         <i class="fas fa-file-alt me-2" style="color: var(--apple-blue);"></i>
                         Vehicle Documents
+                        <span class="badge ms-2" style="background: var(--apple-green);">{{ docs|length }} files</span>
+                    </div>
+                    <div class="apple-card-body">
+                        {% for doc in docs %}
+                        <div class="document-item mb-3 p-3" style="background: rgba(255,255,255,0.5); border-radius: 12px; border-left: 4px solid 
+                            {% if doc.expiry_status == 'expired' %}var(--apple-red)
+                            {% elif doc.expiry_status == 'expiring_soon' %}var(--apple-orange)
+                            {% else %}var(--apple-green){% endif %};">
+                            
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fas fa-file-pdf me-2" style="color: 
+                                            {% if doc.type == 'Insurance' %}var(--apple-green)
+                                            {% elif doc.type == 'Emission Test' %}var(--apple-orange)
+                                            {% elif doc.type == 'RC Copy' %}var(--apple-blue)
+                                            {% else %}var(--apple-gray){% endif %};"></i>
+                                        <span class="fw-bold">{{ doc.type }}</span>
+                                        
+                                        {% if doc.expiry %}
+                                        <span class="badge ms-2" style="background: 
+                                            {% if doc.expiry_status == 'expired' %}var(--apple-red)
+                                            {% elif doc.expiry_status == 'expiring_soon' %}var(--apple-orange)
+                                            {% else %}var(--apple-green){% endif %}; color: white;">
+                                            {% if doc.expiry_status == 'expired' %}
+                                                <i class="fas fa-exclamation-triangle me-1"></i>EXPIRED
+                                            {% elif doc.expiry_status == 'expiring_soon' %}
+                                                <i class="fas fa-clock me-1"></i>{{ doc.days_until_expiry }} days left
+                                            {% else %}
+                                                <i class="fas fa-check me-1"></i>Valid
+                                            {% endif %}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    {% if doc.expiry %}
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar me-1"></i>
+                                            Expires: <strong>{{ doc.expiry }}</strong>
+                                            {% if doc.expiry_status == 'expired' %}
+                                                <span style="color: var(--apple-red); font-weight: bold;"> - RENEWAL REQUIRED!</span>
+                                            {% elif doc.expiry_status == 'expiring_soon' %}
+                                                <span style="color: var(--apple-orange); font-weight: bold;"> - Renewal Due Soon</span>
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-upload me-1"></i>
+                                            Uploaded: {{ doc.uploaded_date[:10] if doc.uploaded_date else 'Recently' }}
+                                            by {{ doc.uploaded_by or 'Admin' }}
+                                        </small>
+                                    </div>
+                                    
+                                    {% if doc.notes %}
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-sticky-note me-1"></i>
+                                            {{ doc.notes }}
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="text-end">
+                                    {% if doc.drive_link %}
+                                    <a href="{{ doc.drive_link }}" target="_blank" class="apple-btn apple-btn-primary mb-2" 
+                                       style="padding: 8px 16px; font-size: 0.85rem;">
+                                        <i class="fas fa-external-link-alt me-1"></i>View in Drive
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <div>
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-file me-1"></i>{{ doc.original_filename or doc.filename }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- Document Summary -->
+                        <div class="mt-3 p-3" style="background: rgba(0,122,255,0.1); border-radius: 12px;">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="fw-bold" style="color: var(--apple-green);">
+                                        {{ docs|selectattr('expiry_status', 'equalto', 'valid')|list|length }}
+                                    </div>
+                                    <small class="text-muted">Valid</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="fw-bold" style="color: var(--apple-orange);">
+                                        {{ docs|selectattr('expiry_status', 'equalto', 'expiring_soon')|list|length }}
+                                    </div>
+                                    <small class="text-muted">Expiring Soon</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="fw-bold" style="color: var(--apple-red);">
+                                        {{ docs|selectattr('expiry_status', 'equalto', 'expired')|list|length }}
+                                    </div>
+                                    <small class="text-muted">Expired</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% else %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.4s;">
+                    <div class="apple-card-body text-center py-5">
+                        <i class="fas fa-file-alt fa-3x mb-3" style="color: var(--apple-gray); opacity: 0.3;"></i>
+                        <h6 style="color: var(--apple-gray);">No Documents Uploaded</h6>
+                        <p class="text-muted mb-3">Upload important documents like RC, Insurance, Emission Test</p>
+                        {% if role == "admin" %}
+                        <a href="{{ url_for('upload_document', car_id=v.reg_no) }}" class="apple-btn apple-btn-primary">
+                            <i class="fas fa-plus me-1"></i>Upload First Document
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
                     </div>
                     <div class="apple-card-body">
                         {% for doc in docs %}
