@@ -1,27 +1,17 @@
 import os
 import json
 import pickle
+import base64
 from datetime import datetime, timedelta
 from functools import wraps
 import secrets
 import logging
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-
-# Google integration (optional)
-try:
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaFileUpload
-    from googleapiclient.errors import HttpError
-    GOOGLE_AVAILABLE = True
-except ImportError:
-    GOOGLE_AVAILABLE = False
-    print("⚠️  Google libraries not installed. Google integration disabled.")
 
 # Configure logging
 os.makedirs('logs', exist_ok=True)
@@ -45,10 +35,6 @@ DATA_DIR = 'data'
 os.makedirs(DATA_DIR, exist_ok=True)
 DATA_FILE = os.path.join(DATA_DIR, 'inanis_garage_data.pickle')
 
-# Google configuration
-SERVICE_ACCOUNT_FILE = os.environ.get('GOOGLE_CREDENTIALS', 'credentials.json')
-CALENDAR_ID = os.environ.get('CALENDAR_ID', 'primary')
-
 # Global data
 users = {}
 vehicles = {}
@@ -62,20 +48,130 @@ driveservice = None
 calservice = None
 google_enabled = False
 
+def get_google_credentials():
+    """
+    Load Google credentials from environment variables (secure)
+    """
+    try:
+        # Method 1: Complete JSON string in environment variable
+        creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+        if creds_json:
+            logger.info("Loading Google credentials from JSON environment variable")
+            return json.loads(creds_json)
+        
+        # Method 2: Individual environment variables (more secure)
+        google_creds = {
+            "type": "service_account",
+            "project_id": os.environ.get('GOOGLE_PROJECT_ID'),
+            "private_key_id": os.environ.get('GOOGLE_PRIVATE_KEY_ID'),
+            "private_key": os.environ.get('GOOGLE_PRIVATE_KEY', '').replace('\\n', '\n'),
+            "client_email": os.environ.get('GOOGLE_CLIENT_EMAIL'),
+            "client_id": os.environ.get('GOOGLE_CLIENT_ID'),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": os.environ.get('GOOGLE_CLIENT_CERT_URL')
+        }
+        
+        # Check if we have the minimum required credentials
+        if google_creds['project_id'] and google_creds['client_email'] and google_creds['private_key']:
+            logger.info("Loading Google credentials from individual environment variables")
+            return google_creds
+            
+        logger.warning("Google Drive credentials not found in environment variables")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Failed to load Google credentials: {e}")
+        return None
+
 def init_google_services():
     global driveservice, calservice, google_enabled
-    if not GOOGLE_AVAILABLE or not os.path.exists(SERVICE_ACCOUNT_FILE):
-        return False
     try:
-        credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE)
+        credentials_info = get_google_credentials()
+        if not credentials_info:
+            logger.info("Google Drive not configured - storing documents locally only")
+            return False
+        
+        # Import Google libraries (only if credentials available)
+        try:
+            from google.oauth2 import service_account
+            from googleapiclient.discovery import build
+        except ImportError:
+            logger.warning("Google libraries not installed - storing locally only")
+            return False
+        
+        # Create credentials from environment data
+        credentials = service_account.Credentials.from_service_account_info(
+            credentials_info, 
+            scopes=['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/calendar']
+        )
+        
         driveservice = build('drive', 'v3', credentials=credentials)
         calservice = build('calendar', 'v3', credentials=credentials)
         google_enabled = True
         logger.info("✅ Google services initialized for Inanis Garage")
         return True
+        
     except Exception as e:
         logger.error(f"Google initialization failed: {e}")
         return False
+
+def upload_file_to_drive(file_path):
+    """
+    Secure Google Drive upload using environment credentials
+    """
+    try:
+        if not google_enabled or not driveservice:
+            logger.warning("Google Drive not available - storing locally only")
+            return None, None
+        
+        from googleapiclient.http import MediaFileUpload
+        
+        # Create file metadata
+        file_metadata = {
+            'name': f"Inanis_Garage_{os.path.basename(file_path)}",
+            'parents': [os.environ.get('GOOGLE_DRIVE_FOLDER_ID', 'root')]
+        }
+        
+        media = MediaFileUpload(file_path, resumable=True)
+        
+        # Upload file
+        file = driveservice.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id,webViewLink'
+        ).execute()
+        
+        # Make file viewable by anyone with the link
+        permission = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
+        driveservice.permissions().create(fileId=file['id'], body=permission).execute()
+        
+        logger.info(f"✅ File uploaded to Google Drive: {file['id']}")
+        return file['id'], file['webViewLink']
+        
+    except Exception as e:
+        logger.error(f"Google Drive upload failed: {e}")
+        return None, None
+
+def create_calendar_event(summary, description, start_date, end_date):
+    if not google_enabled or not calservice:
+        return None
+    try:
+        event = {
+            'summary': f"[Inanis Garage] {summary}",
+            'description': f"{description}\n\nManaged by Inanis Garage System",
+            'start': {'date': start_date},
+            'end': {'date': end_date},
+        }
+        event = calservice.events().insert(calendarId='primary', body=event).execute()
+        return event.get('htmlLink')
+    except Exception as e:
+        logger.error(f"Calendar event failed: {e}")
+        return None
 
 def load_data():
     global users, vehicles, assignments, fuel_logs, documents, maintenance_records
@@ -144,33 +240,84 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def upload_file_to_drive(file_path):
-    if not google_enabled or not driveservice:
-        return None, None
-    try:
-        file_metadata = {"name": f"InanisGarage_{os.path.basename(file_path)}"}
-        media = MediaFileUpload(file_path, resumable=True)
-        file = driveservice.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-        return file.get('id'), file.get('webViewLink')
-    except Exception as e:
-        logger.error(f"Drive upload failed: {e}")
-        return None, None
-
-def create_calendar_event(summary, description, start_date, end_date):
-    if not google_enabled or not calservice:
-        return None
-    try:
-        event = {
-            'summary': f"[Inanis Garage] {summary}",
-            'description': f"{description}\n\nManaged by Inanis Garage System",
-            'start': {'date': start_date},
-            'end': {'date': end_date},
+def get_indian_car_icon(make, model, year, color=""):
+    """
+    Get car icon URL for Indian vehicles - 100% FREE
+    """
+    make_lower = make.lower().replace(' ', '').replace('-', '')
+    
+    # Indian Car Brand Logos (Free CDN links)
+    indian_car_logos = {
+        'maruti': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
+        'marutisuzuki': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
+        'suzuki': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
+        'tata': 'https://logos-world.net/wp-content/uploads/2021/03/Tata-Logo.png',
+        'mahindra': 'https://logos-world.net/wp-content/uploads/2021/03/Mahindra-Logo.png',
+        'hyundai': 'https://logos-world.net/wp-content/uploads/2021/03/Hyundai-Logo.png',
+        'honda': 'https://logos-world.net/wp-content/uploads/2021/03/Honda-Logo.png',
+        'toyota': 'https://logos-world.net/wp-content/uploads/2021/03/Toyota-Logo.png',
+        'kia': 'https://logos-world.net/wp-content/uploads/2021/03/Kia-Logo.png',
+        'mg': 'https://logos-world.net/wp-content/uploads/2021/08/MG-Logo.png',
+        'renault': 'https://logos-world.net/wp-content/uploads/2021/03/Renault-Logo.png',
+        'nissan': 'https://logos-world.net/wp-content/uploads/2021/03/Nissan-Logo.png',
+        'ford': 'https://logos-world.net/wp-content/uploads/2021/03/Ford-Logo.png',
+        'volkswagen': 'https://logos-world.net/wp-content/uploads/2021/03/Volkswagen-Logo.png',
+        'skoda': 'https://logos-world.net/wp-content/uploads/2021/03/Skoda-Logo.png',
+        'bmw': 'https://logos-world.net/wp-content/uploads/2021/03/BMW-Logo.png',
+        'mercedes': 'https://logos-world.net/wp-content/uploads/2021/03/Mercedes-Benz-Logo.png',
+        'audi': 'https://logos-world.net/wp-content/uploads/2021/03/Audi-Logo.png',
+        'jeep': 'https://logos-world.net/wp-content/uploads/2021/03/Jeep-Logo.png',
+        'datsun': 'https://1000logos.net/wp-content/uploads/2018/03/Datsun-Logo.png',
+    }
+    
+    # Try to get brand logo first
+    brand_logo = indian_car_logos.get(make_lower)
+    if brand_logo:
+        return {
+            'type': 'logo',
+            'url': brand_logo,
+            'alt': f"{make} Logo"
         }
-        event = calservice.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-        return event.get('htmlLink')
-    except Exception as e:
-        logger.error(f"Calendar event failed: {e}")
-        return None
+    
+    # Fallback: Create custom placeholder with Indian car info
+    return get_indian_car_placeholder(make, model, year, color)
+
+def get_indian_car_placeholder(make, model, year, color):
+    """
+    Create custom placeholder for Indian cars
+    """
+    # Color mapping for Indian preferences
+    color_codes = {
+        'white': 'F8F9FA',
+        'black': '212529', 
+        'silver': 'ADB5BD',
+        'gray': '6C757D',
+        'grey': '6C757D',
+        'red': 'DC3545',
+        'blue': '0D6EFD',
+        'green': '198754',
+        'yellow': 'FFC107',
+        'brown': '795548',
+        'orange': 'FD7E14',
+        'pearl': 'E9ECEF',
+        'maroon': '800020'
+    }
+    
+    bg_color = color_codes.get(color.lower(), '007AFF')  # Default Apple blue
+    text_color = 'FFFFFF' if bg_color in ['212529', '6C757D', '800020', 'DC3545', '198754'] else '000000'
+    
+    # Create abbreviated text
+    car_text = f"{make[:3]}{model[:3]}".upper()
+    if len(car_text) > 6:
+        car_text = car_text[:6]
+    
+    placeholder_url = f"https://via.placeholder.com/300x200/{bg_color}/{text_color}?text={car_text}"
+    
+    return {
+        'type': 'placeholder',
+        'url': placeholder_url,
+        'alt': f"{make} {model} {year}"
+    }
 
 # Routes
 @app.route('/')
@@ -221,7 +368,6 @@ def index():
                          available_count=available_count,
                          assigned_count=assigned_count,
                          expiring_docs=expiring_docs[:5])  # Show top 5 alerts
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -316,8 +462,6 @@ def add_vehicle():
     
     return render_template('add_vehicle.html')
 
-
-
 @app.route('/edit_vehicle/<car_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -361,8 +505,9 @@ def edit_vehicle(car_id):
                 'updated_date': datetime.now().isoformat(),
                 'updated_by': current_user.id,
                 'garage': 'Inanis Garage',
-                'image_url': v.get('image_url'),  # Keep existing image
-                'image_fetched': v.get('image_fetched', False)
+                'thumbnail_url': v.get('thumbnail_url'),  # Keep existing thumbnail
+                'thumbnail_filename': v.get('thumbnail_filename'),
+                'has_custom_image': v.get('has_custom_image', False)
             }
             
             # If registration number changed, we need to move all related data
@@ -466,24 +611,62 @@ def assign_driver(car_id):
 @app.route('/add_fuel/<car_id>', methods=['POST'])
 @login_required
 def add_fuel(car_id):
+    if car_id not in vehicles:
+        flash("Vehicle not found.", "error")
+        return redirect(url_for('index'))
+    
     try:
-        prev = float(request.form['prev_odo'])
-        curr = float(request.form['curr_odo'])
+        prev_odo = float(request.form['prev_odo'])
+        curr_odo = float(request.form['curr_odo'])
         liters = float(request.form['liters'])
-        cost = float(request.form.get('cost', 0))
-
-        log = {
-            "date": request.form['date'],
-            "prev_odo": prev, "curr_odo": curr,
-            "liters": liters, "cost": cost,
-            "driver": current_user.id
+        date = request.form['date']
+        
+        # Validation
+        if curr_odo <= prev_odo:
+            flash("Current odometer must be greater than previous reading.", "error")
+            return redirect(url_for('vehicle', car_id=car_id))
+        
+        if liters <= 0:
+            flash("Fuel quantity must be greater than 0.", "error")
+            return redirect(url_for('vehicle', car_id=car_id))
+        
+        # Calculate fuel efficiency
+        distance = curr_odo - prev_odo
+        fuel_efficiency = distance / liters  # km per liter
+        
+        # Create fuel log entry
+        fuel_entry = {
+            "car_id": car_id,
+            "prev_odo": prev_odo,
+            "curr_odo": curr_odo,
+            "distance": distance,
+            "liters": liters,
+            "fuel_efficiency": round(fuel_efficiency, 2),
+            "date": date,
+            "driver": current_user.id,
+            "created_date": datetime.now().isoformat(),
+            "garage": "Inanis Garage"
         }
-        fuel_logs.setdefault(car_id, []).append(log)
-        vehicles[car_id]["odo"] = curr
+        
+        # Add to fuel logs
+        if car_id not in fuel_logs:
+            fuel_logs[car_id] = []
+        fuel_logs[car_id].append(fuel_entry)
+        
+        # Update vehicle odometer
+        vehicles[car_id]["odo"] = curr_odo
+        
         save_data()
-        flash(f"Fuel log added for {car_id}", "success")
+        
+        flash(f"✅ Fuel log added! Distance: {distance:.0f} km, Efficiency: {fuel_efficiency:.1f} km/L", "success")
+        logger.info(f"Fuel log added for {car_id}: {distance}km, {fuel_efficiency:.1f}km/L")
+        
     except ValueError:
-        flash("Please enter valid numbers.", "error")
+        flash("Please enter valid numbers for odometer and fuel quantity.", "error")
+    except Exception as e:
+        logger.error(f"Fuel log error: {e}")
+        flash("Failed to add fuel log. Please try again.", "error")
+    
     return redirect(url_for('vehicle', car_id=car_id))
 
 @app.route('/upload_document/<car_id>', methods=['GET', 'POST'])
@@ -604,6 +787,8 @@ def upload_document(car_id):
                 success_msg += f" {expiry_alert}"
             if drive_link:
                 success_msg += " (Backed up to Google Drive)"
+            else:
+                success_msg += " (Stored locally - add Google credentials for cloud backup)"
                 
             flash(success_msg, "success")
             logger.info(f"✅ Document uploaded: {car_id}/{safe_filename} by {current_user.id}")
@@ -617,6 +802,40 @@ def upload_document(car_id):
     # GET request - show upload form
     return render_template('add_document.html', car_id=car_id)
 
+@app.route('/view_document/<car_id>/<filename>')
+@login_required
+def view_document(car_id, filename):
+    """
+    Serve uploaded documents for viewing
+    """
+    try:
+        # Security: Only allow viewing documents for cars user has access to
+        if car_id not in vehicles:
+            flash("Vehicle not found.", "error")
+            return redirect(url_for('index'))
+        
+        # Check if file exists in static/documents
+        file_path = os.path.join('static', 'documents', filename)
+        if os.path.exists(file_path):
+            return send_file(file_path, as_attachment=False)
+        
+        # Check if file exists in static/car_thumbnails (fallback)
+        file_path = os.path.join('static', 'car_thumbnails', filename)
+        if os.path.exists(file_path):
+            return send_file(file_path, as_attachment=False)
+        
+        # Check other possible locations
+        file_path = os.path.join('temp_uploads', filename)
+        if os.path.exists(file_path):
+            return send_file(file_path, as_attachment=False)
+            
+        flash("Document file not found.", "error")
+        return redirect(url_for('vehicle', car_id=car_id))
+        
+    except Exception as e:
+        logger.error(f"Error serving document: {e}")
+        flash("Error loading document.", "error")
+        return redirect(url_for('vehicle', car_id=car_id))
 
 @app.route('/add_user', methods=['GET', 'POST'])
 @login_required
@@ -669,13 +888,15 @@ def update_driver_license(username):
 if __name__ == "__main__":
     os.makedirs('temp_uploads', exist_ok=True)
     os.makedirs('static/css', exist_ok=True)
+    os.makedirs('static/documents', exist_ok=True)
+    os.makedirs('static/car_thumbnails', exist_ok=True)
     os.makedirs('templates', exist_ok=True)
 
     init_google_services()
     load_data()
 
     print("🔧 Inanis Garage Management System Starting...")
-    print(f"📊 Google Integration: {'✅ Enabled' if google_enabled else '❌ Disabled'}")
+    print(f"📊 Google Integration: {'✅ Enabled' if google_enabled else '❌ Disabled (add environment variables to enable)'}")
     print(f"👥 Users: {len(users)}")
     print(f"🚙 Vehicles: {len(vehicles)}")
     print("🌐 Access: http://localhost:5000")
@@ -683,159 +904,3 @@ if __name__ == "__main__":
 
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-@app.route('/view_document/<car_id>/<filename>')
-@login_required
-def view_document(car_id, filename):
-    """
-    Serve uploaded documents for viewing
-    """
-    try:
-        # Security: Only allow viewing documents for cars user has access to
-        if car_id not in vehicles:
-            flash("Vehicle not found.", "error")
-            return redirect(url_for('index'))
-        
-        # Check if file exists in temp_uploads
-        file_path = os.path.join('temp_uploads', filename)
-        if os.path.exists(file_path):
-            from flask import send_file
-            return send_file(file_path, as_attachment=False)
-        
-        # Check if file exists in data directory
-        file_path = os.path.join('data', 'documents', car_id, filename)
-        if os.path.exists(file_path):
-            return send_file(file_path, as_attachment=False)
-            
-        flash("Document file not found.", "error")
-        return redirect(url_for('vehicle', car_id=car_id))
-        
-    except Exception as e:
-        logger.error(f"Error serving document: {e}")
-        flash("Error loading document.", "error")
-        return redirect(url_for('vehicle', car_id=car_id))
-def get_indian_car_icon(make, model, year, color=""):
-    """
-    Get car icon URL for Indian vehicles - 100% FREE
-    """
-    make_lower = make.lower().replace(' ', '').replace('-', '')
-    
-    # Indian Car Brand Logos (Free CDN links)
-    indian_car_logos = {
-        'maruti': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
-        'marutisuzuki': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
-        'suzuki': 'https://logos-world.net/wp-content/uploads/2021/03/Suzuki-Logo.png',
-        'tata': 'https://logos-world.net/wp-content/uploads/2021/03/Tata-Logo.png',
-        'mahindra': 'https://logos-world.net/wp-content/uploads/2021/03/Mahindra-Logo.png',
-        'hyundai': 'https://logos-world.net/wp-content/uploads/2021/03/Hyundai-Logo.png',
-        'honda': 'https://logos-world.net/wp-content/uploads/2021/03/Honda-Logo.png',
-        'toyota': 'https://logos-world.net/wp-content/uploads/2021/03/Toyota-Logo.png',
-        'kia': 'https://logos-world.net/wp-content/uploads/2021/03/Kia-Logo.png',
-        'mg': 'https://logos-world.net/wp-content/uploads/2021/08/MG-Logo.png',
-        'renault': 'https://logos-world.net/wp-content/uploads/2021/03/Renault-Logo.png',
-        'nissan': 'https://logos-world.net/wp-content/uploads/2021/03/Nissan-Logo.png',
-        'ford': 'https://logos-world.net/wp-content/uploads/2021/03/Ford-Logo.png',
-        'volkswagen': 'https://logos-world.net/wp-content/uploads/2021/03/Volkswagen-Logo.png',
-        'skoda': 'https://logos-world.net/wp-content/uploads/2021/03/Skoda-Logo.png',
-        'bmw': 'https://logos-world.net/wp-content/uploads/2021/03/BMW-Logo.png',
-        'mercedes': 'https://logos-world.net/wp-content/uploads/2021/03/Mercedes-Benz-Logo.png',
-        'audi': 'https://logos-world.net/wp-content/uploads/2021/03/Audi-Logo.png',
-        'jeep': 'https://logos-world.net/wp-content/uploads/2021/03/Jeep-Logo.png',
-        'datsun': 'https://1000logos.net/wp-content/uploads/2018/03/Datsun-Logo.png',
-    }
-    
-    # Try to get brand logo first
-    brand_logo = indian_car_logos.get(make_lower)
-    if brand_logo:
-        return {
-            'type': 'logo',
-            'url': brand_logo,
-            'alt': f"{make} Logo"
-        }
-    
-    # Fallback: Create custom placeholder with Indian car info
-    return get_indian_car_placeholder(make, model, year, color)
-
-def get_indian_car_placeholder(make, model, year, color):
-    """
-    Create custom placeholder for Indian cars
-    """
-    # Color mapping for Indian preferences
-    color_codes = {
-        'white': 'F8F9FA',
-        'black': '212529', 
-        'silver': 'ADB5BD',
-        'gray': '6C757D',
-        'grey': '6C757D',
-        'red': 'DC3545',
-        'blue': '0D6EFD',
-        'green': '198754',
-        'yellow': 'FFC107',
-        'brown': '795548',
-        'orange': 'FD7E14',
-        'pearl': 'E9ECEF',
-        'maroon': '800020'
-    }
-    
-    bg_color = color_codes.get(color.lower(), '007AFF')  # Default Apple blue
-    text_color = 'FFFFFF' if bg_color in ['212529', '6C757D', '800020', 'DC3545', '198754'] else '000000'
-    
-    # Create abbreviated text
-    car_text = f"{make[:3]}{model[:3]}".upper()
-    if len(car_text) > 6:
-        car_text = car_text[:6]
-    
-    placeholder_url = f"https://via.placeholder.com/300x200/{bg_color}/{text_color}?text={car_text}"
-    
-    return {
-        'type': 'placeholder',
-        'url': placeholder_url,
-        'alt': f"{make} {model} {year}"
-    }
-
-def get_popular_indian_cars():
-    """
-    Popular Indian car models for suggestions
-    """
-    return {
-        'Maruti Suzuki': ['Swift', 'Baleno', 'Wagon R', 'Alto', 'Vitara Brezza', 'Ertiga', 'Dzire', 'Ciaz'],
-        'Tata': ['Nexon', 'Harrier', 'Safari', 'Altroz', 'Tigor', 'Tiago', 'Punch'],
-        'Hyundai': ['Creta', 'i20', 'Venue', 'Verna', 'Santro', 'Grand i10'],
-        'Mahindra': ['XUV700', 'XUV300', 'Scorpio', 'Bolero', 'Thar', 'Marazzo'],
-        'Honda': ['City', 'Amaze', 'WR-V', 'Jazz'],
-        'Toyota': ['Innova Crysta', 'Fortuner', 'Glanza', 'Urban Cruiser'],
-        'Kia': ['Seltos', 'Sonet', 'Carens'],
-        'Renault': ['Kiger', 'Triber', 'Kwid'],
-        'Nissan': ['Magnite', 'Kicks']
-    }
-
-@app.route('/view_document/<car_id>/<filename>')
-@login_required
-def view_document(car_id, filename):
-    """
-    Serve uploaded documents for viewing
-    """
-    try:
-        # Security: Only allow viewing documents for cars user has access to
-        if car_id not in vehicles:
-            flash("Vehicle not found.", "error")
-            return redirect(url_for('index'))
-        
-        # Check if file exists in static/car_thumbnails (we're using this folder temporarily)
-        import os
-        file_path = os.path.join('static', 'car_thumbnails', filename)
-        if os.path.exists(file_path):
-            from flask import send_file
-            return send_file(file_path, as_attachment=False)
-        
-        # Check other possible locations
-        file_path = os.path.join('temp_uploads', filename)
-        if os.path.exists(file_path):
-            return send_file(file_path, as_attachment=False)
-            
-        flash("Document file not found.", "error")
-        return redirect(url_for('vehicle', car_id=car_id))
-        
-    except Exception as e:
-        logger.error(f"Error serving document: {e}")
-        flash("Error loading document.", "error")
-        return redirect(url_for('vehicle', car_id=car_id))
