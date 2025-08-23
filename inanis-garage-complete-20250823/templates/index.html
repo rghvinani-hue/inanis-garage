@@ -80,24 +80,54 @@
             {% endif %}
         </div>
 
-        <div class="row">
-            {% for vid, v in vehicles.items() %}
-            <div class="col-lg-4 col-md-6 mb-4">
-                <div class="apple-vehicle-card apple-slide-up">
-                    <div class="apple-vehicle-status apple-status-{{ 'available' if status[vid] == 'Available' else 'assigned' }}">
-                        <i class="fas fa-{{ 'check' if status[vid] == 'Available' else 'user' }} me-1"></i>{{ status[vid] }}
-                    </div>
-
-                    <div class="p-4">
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="me-3">
-                                <i class="fas fa-car fa-2x" style="color: var(--apple-blue);"></i>
+                              <!-- Car Thumbnail Display -->
+                        <div class="text-center mb-3">
+                            {% if v.get('thumbnail_url') %}
+                            <!-- Custom Uploaded Thumbnail -->
+                            <div class="car-thumbnail-container mb-2">
+                                <img src="{{ v.thumbnail_url }}" alt="{{ v.make }} {{ v.model }}" 
+                                     class="car-thumbnail" 
+                                     style="width: 100%; max-width: 200px; height: 120px; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                <!-- Fallback if image fails -->
+                                <div class="car-fallback d-flex align-items-center justify-content-center" 
+                                     style="display: none; width: 200px; height: 120px; background: linear-gradient(135deg, var(--apple-blue), var(--garage-accent)); border-radius: 12px;">
+                                    <div class="text-center text-white">
+                                        <i class="fas fa-car fa-2x mb-1"></i>
+                                        <div class="small">{{ v.make }}</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <h5 class="mb-1 fw-bold" style="color: var(--apple-dark-gray);">{{ v.reg_no }}</h5>
-                                <p class="mb-0 text-muted">{{ v.make }} {{ v.model }}</p>
+                            <div class="badge bg-success mb-2" style="font-size: 0.7rem;">
+                                <i class="fas fa-camera me-1"></i>Custom Photo
                             </div>
+                            {% else %}
+                            <!-- Default Car Icon -->
+                            <div class="car-default-icon d-inline-flex align-items-center justify-content-center mb-2" 
+                                 style="width: 200px; height: 120px; background: linear-gradient(135deg, var(--apple-blue), var(--garage-accent)); border-radius: 12px;">
+                                <div class="text-center text-white">
+                                    <i class="fas fa-car fa-3x mb-2"></i>
+                                    <div class="fw-bold">{{ v.make }}</div>
+                                    <div class="small">{{ v.model }}</div>
+                                </div>
+                            </div>
+                            <div class="badge bg-secondary mb-2" style="font-size: 0.7rem;">
+                                <i class="fas fa-upload me-1"></i>Add Photo
+                            </div>
+                            {% endif %}
                         </div>
+
+                        <!-- Vehicle Info -->
+                        <div class="text-center mb-3">
+                            <h5 class="mb-1 fw-bold" style="color: var(--apple-dark-gray);">{{ v.reg_no }}</h5>
+                            <p class="mb-1 text-muted">{{ v.make }} {{ v.model }} ({{ v.year }})</p>
+                            {% if v.color %}
+                            <span class="badge" style="background: var(--apple-light-gray); color: var(--apple-dark-gray); font-size: 0.75rem;">
+                                <i class="fas fa-palette me-1"></i>{{ v.color }}
+                            </span>
+                            {% endif %}
+                        </div>
+
 
                         <div class="row mb-3">
                             <div class="col-6">
