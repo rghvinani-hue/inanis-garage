@@ -106,13 +106,38 @@
                                 </div>
                             </div>
 
-                            <div class="mt-4">
+                                                       <div class="mt-4">
                                 <label class="apple-form-label">
                                     <i class="fas fa-sticky-note me-1"></i>Description
                                 </label>
                                 <textarea class="form-control apple-form-control" name="desc" rows="3" 
                                           placeholder="Vehicle details, condition, special features..."></textarea>
                             </div>
+
+                            <!-- 📸 NEW CODE GOES HERE -->
+                            <div class="mt-4">
+                                <label class="apple-form-label">
+                                    <i class="fas fa-image me-1"></i>Car Thumbnail (Optional)
+                                </label>
+                                <input type="file" class="form-control apple-form-control" name="car_thumbnail" 
+                                       accept="image/*" id="carThumbnailInput">
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Upload a car photo (JPG, PNG, WEBP - Max: 5MB). This will be displayed on the dashboard.
+                                </div>
+                                
+                                <!-- Preview -->
+                                <div id="thumbnailPreview" class="mt-3" style="display: none;">
+                                    <img id="previewImage" src="" alt="Car Preview" 
+                                         style="max-width: 200px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);">
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearThumbnail()">
+                                            <i class="fas fa-times me-1"></i>Remove Image
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 📸 END OF NEW CODE -->
 
                             <div class="d-flex justify-content-between mt-5">
                                 <a href="{{ url_for('index') }}" class="apple-btn apple-btn-secondary">
@@ -122,6 +147,7 @@
                                     <i class="fas fa-plus me-1"></i>Add to Garage
                                 </button>
                             </div>
+
                         </form>
                     </div>
                 </div>
