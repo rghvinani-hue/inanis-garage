@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  inanis-garage:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-inanis-garage-super-secret-key-change-in-production}
+      - FLASK_DEBUG=${FLASK_DEBUG:-false}
+      - GOOGLE_CREDENTIALS=/app/credentials.json
+      - CALENDAR_ID=${CALENDAR_ID:-primary}
+    volumes:
+      - ./data:/app/data
+      - ./credentials.json:/app/credentials.json:ro
+      - ./temp_uploads:/app/temp_uploads
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"] 
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - inanis-network
+
+networks:
+  inanis-network:
+    driver: bridge
+
+volumes:
+  inanis_data:
+    driver: local
+  inanis_logs:
+    driver: local
