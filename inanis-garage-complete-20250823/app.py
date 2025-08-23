@@ -341,38 +341,82 @@ def add_fuel(car_id):
 @admin_required
 def upload_document(car_id):
     if request.method == "POST":
-        file = request.files['doc_file']
-        doc_type = request.form['doc_type']
+        file = request.files.get('doc_file')
+        doc_type = request.form.get('doc_type')
         expiry = request.form.get('expiry')
-
-        if file and file.filename:
+        notes = request.form.get('notes', '')
+        
+        if not file or not file.filename:
+            flash("Please select a file to upload.", "error")
+            return render_template('add_document.html', car_id=car_id)
+        
+        if not doc_type:
+            flash("Please select a document type.", "error")
+            return render_template('add_document.html', car_id=car_id)
+        
+        try:
             filename = secure_filename(file.filename)
+            # Add timestamp to avoid conflicts
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{car_id}_{doc_type.replace(' ', '_')}_{timestamp}_{filename}"
+            
             os.makedirs('temp_uploads', exist_ok=True)
             local_path = os.path.join('temp_uploads', filename)
-
-            try:
-                file.save(local_path)
-                file_id, web_link = upload_file_to_drive(local_path)
-
-                doc_record = {
-                    'type': doc_type, 'expiry': expiry, 'filename': filename,
-                    'drive_link': web_link, 'drive_id': file_id,
-                    'uploaded_date': datetime.now().isoformat()
-                }
-                documents.setdefault(car_id, []).append(doc_record)
-                save_data()
-
-                if web_link:
-                    flash("Document uploaded to Google Drive!", "success")
-                else:
-                    flash("Document saved locally.", "warning")
-            except Exception as e:
-                flash("Upload failed.", "error")
-            finally:
-                if os.path.exists(local_path):
-                    os.remove(local_path)
+            file.save(local_path)
+            
+            # Try to upload to Google Drive
+            file_id, web_link = upload_file_to_drive(local_path)
+            
+            # Calculate days until expiry
+            days_until_expiry = None
+            expiry_status = "valid"
+            if expiry:
+                try:
+                    expiry_date = datetime.strptime(expiry, '%Y-%m-%d').date()
+                    days_until_expiry = (expiry_date - datetime.now().date()).days
+                    if days_until_expiry < 0:
+                        expiry_status = "expired"
+                    elif days_until_expiry <= 30:
+                        expiry_status = "expiring_soon"
+                except ValueError:
+                    pass
+            
+            doc_record = {
+                'type': doc_type,
+                'expiry': expiry,
+                'expiry_status': expiry_status,
+                'days_until_expiry': days_until_expiry,
+                'filename': filename,
+                'original_filename': file.filename,
+                'drive_link': web_link,
+                'drive_id': file_id,
+                'notes': notes,
+                'uploaded_date': datetime.now().isoformat(),
+                'uploaded_by': current_user.id,
+                'garage': 'Inanis Garage'
+            }
+            
+            documents.setdefault(car_id, []).append(doc_record)
+            save_data()
+            
+            logger.info(f"✅ Document uploaded for {car_id} by {current_user.id}")
+            
+            if web_link:
+                flash(f"Document '{doc_type}' uploaded to Google Drive successfully! You can view it anytime.", "success")
+            else:
+                flash(f"Document '{doc_type}' saved locally (Google Drive unavailable).", "warning")
+                
+        except Exception as e:
+            logger.error(f"Document upload failed: {e}")
+            flash("Document upload failed. Please try again.", "error")
+        finally:
+            # Clean up temp file
+            if os.path.exists(local_path):
+                os.remove(local_path)
+                
         return redirect(url_for('vehicle', car_id=car_id))
-
+    
+    # GET request - show upload form
     return render_template('add_document.html', car_id=car_id)
 
 @app.route('/add_user', methods=['GET', 'POST'])
