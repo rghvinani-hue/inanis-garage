@@ -177,14 +177,51 @@ def create_calendar_event(summary, description, start_date, end_date):
 @login_required
 def index():
     status = {}
+    available_count = 0
+    assigned_count = 0
+    expiring_docs = []
+    
     today = datetime.today().strftime("%Y-%m-%d")
     for vid, v in vehicles.items():
         who = "Available"
         for a in assignments:
             if a["car_id"] == vid and a["start_date"] <= today <= a["end_date"]:
                 who = a["driver"]
+                break
         status[vid] = who
-    return render_template('index.html', vehicles=vehicles, status=status, role=current_user.role)
+        
+        if who == "Available":
+            available_count += 1
+        else:
+            assigned_count += 1
+    
+    # Check for expiring documents
+    for car_id, docs in documents.items():
+        for doc in docs:
+            if doc.get('expiry'):
+                try:
+                    expiry_date = datetime.strptime(doc['expiry'], '%Y-%m-%d').date()
+                    days_until_expiry = (expiry_date - datetime.now().date()).days
+                    if -7 <= days_until_expiry <= 30:  # Show expired (last 7 days) and expiring (next 30 days)
+                        expiring_docs.append({
+                            'car_id': car_id,
+                            'vehicle': vehicles.get(car_id, {}),
+                            'document': doc['type'],
+                            'expiry_date': doc['expiry'],
+                            'days_remaining': days_until_expiry,
+                            'status': 'expired' if days_until_expiry < 0 else ('expiring_soon' if days_until_expiry <= 7 else 'due_soon')
+                        })
+                except ValueError:
+                    continue
+    
+    return render_template('index.html', 
+                         vehicles=vehicles, 
+                         status=status, 
+                         role=current_user.role,
+                         available_count=available_count,
+                         assigned_count=assigned_count,
+                         expiring_docs=expiring_docs[:5])  # Show top 5 alerts
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
