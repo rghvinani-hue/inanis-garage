@@ -260,7 +260,7 @@ def add_vehicle():
         year = int(request.form['year'])
         color = request.form['color'].strip()
         
-        # Handle car thumbnail upload
+        # 📸 Handle car thumbnail upload
         thumbnail_url = None
         thumbnail_filename = None
         
@@ -315,6 +315,7 @@ def add_vehicle():
         return redirect(url_for('index'))
     
     return render_template('add_vehicle.html')
+
 
 
 @app.route('/edit_vehicle/<car_id>', methods=['GET', 'POST'])
