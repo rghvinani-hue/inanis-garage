@@ -8,33 +8,54 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/apple-style.css') }}" rel="stylesheet">
     <style>
-        /* Enhanced Statistics Cards */
-        .apple-stat-content {
-            padding: 1rem;
-        }
+/* Fix Statistics Cards - OVERRIDE ALL CONFLICTS */
+.apple-stat-content {
+    padding: 1rem !important;
+}
 
-        .apple-mini-stat {
-            padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.7);
-            border-radius: 10px;
-            margin-bottom: 0.5rem;
-        }
+.apple-mini-stat {
+    padding: 0.75rem !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+    border-radius: 10px !important;
+    margin-bottom: 0.5rem !important;
+    min-height: 80px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
 
-        .apple-mini-number {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--apple-dark-gray);
-            margin: 0.5rem 0;
-        }
+.apple-mini-number {
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+    color: var(--apple-dark-gray) !important;
+    margin: 0.25rem 0 !important;
+    line-height: 1 !important;
+}
 
-        .apple-mini-label {
-            font-size: 0.8rem;
-            color: var(--apple-gray);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-    </style>
+.apple-mini-label {
+    font-size: 0.75rem !important;
+    color: var(--apple-gray) !important;
+    font-weight: 600 !important;
+    text-transform: none !important;
+    letter-spacing: 0.5px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+}
+
+/* Force proper sizing for center card */
+.apple-stat-card .row.text-center .col-6 {
+    padding: 0.5rem !important;
+}
+
+/* Ensure text doesn't get cut off */
+.apple-stat-card * {
+    overflow: visible !important;
+    text-overflow: clip !important;
+}
+</style>
+
 </head>
 <body>
     <nav class="navbar navbar-expand-lg apple-nav">
