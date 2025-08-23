@@ -36,153 +36,239 @@
             {% endif %}
         {% endwith %}
 
-        <div class="apple-card apple-fade-in">
+        <!-- Vehicle Header Card -->
+        <div class="apple-card apple-fade-in mb-4">
             <div class="apple-card-header">
                 <i class="fas fa-car me-2" style="color: var(--apple-blue);"></i>
                 Vehicle Details: {{ v.reg_no }}
             </div>
             <div class="apple-card-body">
                 <div class="row">
-                    <div class="col-md-6">
-                        <h5>{{ v.make }} {{ v.model }}</h5>
-                        <div class="row mb-3">
-                            <div class="col-sm-6">
-                                <strong>Reg No:</strong> {{ v.reg_no }}<br>
-                                <strong>Year:</strong> {{ v.year }}<br>
-                                <strong>Color:</strong> {{ v.color }}
+                    <div class="col-md-8">
+                        <div class="d-flex align-items-center mb-4">
+                            <div class="me-4">
+                                <div class="d-inline-flex align-items-center justify-content-center rounded-circle"
+                                     style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--apple-blue), var(--garage-accent));">
+                                    <i class="fas fa-car fa-2x text-white"></i>
+                                </div>
                             </div>
-                            <div class="col-sm-6">
-                                <strong>Odometer:</strong> {{ "{:,}".format(v.odo|int) }} km<br>
-                                {% if v.desc %}
-                                <strong>Description:</strong> {{ v.desc }}
-                                {% endif %}
+                            <div>
+                                <h3 class="mb-1 fw-bold" style="color: var(--apple-dark-gray);">{{ v.make }} {{ v.model }}</h3>
+                                <p class="mb-0 text-muted lead">Registration: {{ v.reg_no }}</p>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-sm-6 mb-3">
+                                <label class="text-muted small d-block">Manufacturing Year</label>
+                                <span class="fw-medium fs-5">{{ v.year }}</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <label class="text-muted small d-block">Color</label>
+                                <span class="fw-medium fs-5">{{ v.color or 'Not specified' }}</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <label class="text-muted small d-block">Current Odometer</label>
+                                <span class="fw-medium fs-5">
+                                    <i class="fas fa-tachometer-alt me-1" style="color: var(--apple-blue);"></i>
+                                    {{ "{:,}".format(v.odo|int) }} km
+                                </span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <label class="text-muted small d-block">Added to Garage</label>
+                                <span class="fw-medium fs-5">
+                                    <i class="fas fa-calendar me-1" style="color: var(--apple-green);"></i>
+                                    {% if v.created_date %}
+                                        {{ v.created_date[:10] }}
+                                    {% else %}
+                                        Recently
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        {% if v.desc %}
+                        <div class="mt-3">
+                            <label class="text-muted small d-block">Description</label>
+                            <p class="mb-0">{{ v.desc }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="apple-card" style="background: linear-gradient(135deg, var(--apple-blue), var(--garage-accent)); color: white;">
+                            <div class="apple-card-body text-center">
+                                <i class="fas fa-info-circle fa-2x mb-3"></i>
+                                <h6 class="text-white">Vehicle Status</h6>
+                                <p class="mb-0">Ready for assignments and fuel logging</p>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
+        <div class="row">
+            <!-- Left Column - Forms -->
+            <div class="col-lg-6">
+                <!-- Add Fuel Log -->
+                <div class="apple-card mb-4 apple-slide-up">
+                    <div class="apple-card-header">
+                        <i class="fas fa-gas-pump me-2" style="color: var(--apple-green);"></i>
+                        Add Fuel Log
+                    </div>
+                    <div class="apple-card-body">
+                        <form method="POST" action="{{ url_for('add_fuel', car_id=v.reg_no) }}">
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="apple-form-label">Previous Odometer</label>
+                                    <input type="number" class="form-control apple-form-control" name="prev_odo" 
+                                           value="{{ v.odo }}" required readonly>
+                                </div>
+                                <div class="col-6">
+                                    <label class="apple-form-label">Current Odometer *</label>
+                                    <input type="number" class="form-control apple-form-control" name="curr_odo" 
+                                           required min="{{ v.odo + 1 }}" placeholder="{{ v.odo + 100 }}">
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="apple-form-label">Fuel Liters *</label>
+                                    <input type="number" step="0.01" class="form-control apple-form-control" 
+                                           name="liters" required placeholder="45.50">
+                                </div>
+                                <div class="col-6">
+                                    <label class="apple-form-label">Date *</label>
+                                    <input type="date" class="form-control apple-form-control" name="date" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="apple-btn apple-btn-success w-100">
+                                <i class="fas fa-plus me-1"></i>Add Fuel Log
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Admin Only - Assign Driver -->
                 {% if role == "admin" %}
-                <div class="row mt-4">
-                    <div class="col-md-6">
-                        <div class="apple-card">
-                            <div class="apple-card-body">
-                                <h6><i class="fas fa-user me-2"></i>Assign Driver</h6>
-                                <form method="POST" action="{{ url_for('assign_driver', car_id=v.reg_no) }}">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <div class="mb-3">
-                                        <input type="text" class="form-control apple-form-control" name="driver" placeholder="Driver name" required>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <input type="date" class="form-control apple-form-control" name="start_date" required>
-                                        </div>
-                                        <div class="col-6">
-                                            <input type="date" class="form-control apple-form-control" name="end_date" required>
-                                        </div>
-                                    </div>
-                                    <button type="submit" class="apple-btn apple-btn-primary mt-3">
-                                        <i class="fas fa-user-plus me-1"></i>Assign
-                                    </button>
-                                </form>
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.1s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-user-plus me-2" style="color: var(--apple-orange);"></i>
+                        Assign Driver
+                    </div>
+                    <div class="apple-card-body">
+                        <form method="POST" action="{{ url_for('assign_driver', car_id=v.reg_no) }}">
+                            <div class="mb-3">
+                                <label class="apple-form-label">Driver Name *</label>
+                                <input type="text" class="form-control apple-form-control" name="driver" 
+                                       placeholder="Enter driver name" required>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                <div class="row mt-4">
-                    <div class="col-md-6">
-                        <div class="apple-card">
-                            <div class="apple-card-body">
-                                <h6><i class="fas fa-gas-pump me-2"></i>Add Fuel Log</h6>
-                                <form method="POST" action="{{ url_for('add_fuel', car_id=v.reg_no) }}">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <div class="row mb-3">
-                                        <div class="col-6">
-                                            <label class="apple-form-label">Previous Odo</label>
-                                            <input type="number" class="form-control apple-form-control" name="prev_odo" value="{{ v.odo }}" required>
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="apple-form-label">Current Odo</label>
-                                            <input type="number" class="form-control apple-form-control" name="curr_odo" required>
-                                        </div>
-                                    </div>
-                                    <div class="row mb-3">
-                                        <div class="col-6">
-                                            <label class="apple-form-label">Liters</label>
-                                            <input type="number" step="0.01" class="form-control apple-form-control" name="liters" required>
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="apple-form-label">Date</label>
-                                            <input type="date" class="form-control apple-form-control" name="date" required>
-                                        </div>
-                                    </div>
-                                    <button type="submit" class="apple-btn apple-btn-success">
-                                        <i class="fas fa-plus me-1"></i>Add Fuel Log
-                                    </button>
-                                </form>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="apple-form-label">Start Date *</label>
+                                    <input type="date" class="form-control apple-form-control" name="start_date" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="apple-form-label">End Date *</label>
+                                    <input type="date" class="form-control apple-form-control" name="end_date" required>
+                                </div>
                             </div>
-                        </div>
+                            <button type="submit" class="apple-btn apple-btn-primary w-100">
+                                <i class="fas fa-user-check me-1"></i>Assign Driver
+                            </button>
+                        </form>
                     </div>
                 </div>
 
-                {% if assignments %}
-                <div class="mt-4">
-                    <h6><i class="fas fa-calendar me-2"></i>Assignment History</h6>
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Driver</th>
-                                    <th>Start Date</th>
-                                    <th>End Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for assignment in assignments %}
-                                <tr>
-                                    <td>{{ assignment.driver }}</td>
-                                    <td>{{ assignment.start_date }}</td>
-                                    <td>{{ assignment.end_date }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <!-- Admin Only - Upload Documents -->
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.15s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-file-upload me-2" style="color: var(--apple-purple);"></i>
+                        Document Management
                     </div>
-                </div>
-                {% endif %}
-
-                {% if flogs %}
-                <div class="mt-4">
-                    <h6><i class="fas fa-gas-pump me-2"></i>Fuel History</h6>
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Odometer</th>
-                                    <th>Liters</th>
-                                    <th>Driver</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for log in flogs %}
-                                <tr>
-                                    <td>{{ log.date }}</td>
-                                    <td>{{ log.prev_odo }} → {{ log.curr_odo }}</td>
-                                    <td>{{ log.liters }}</td>
-                                    <td>{{ log.driver }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="apple-card-body text-center">
+                        <i class="fas fa-cloud-upload-alt fa-2x mb-3" style="color: var(--apple-blue);"></i>
+                        <p class="mb-3">Upload vehicle documents like RC, Insurance, Emission Test</p>
+                        <a href="{{ url_for('upload_document', car_id=v.reg_no) }}" class="apple-btn apple-btn-primary">
+                            <i class="fas fa-plus me-1"></i>Upload Document
+                        </a>
                     </div>
                 </div>
                 {% endif %}
             </div>
-        </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+            <!-- Right Column - History -->
+            <div class="col-lg-6">
+                <!-- Assignment History -->
+                {% if assignments %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.2s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-calendar-alt me-2" style="color: var(--apple-purple);"></i>
+                        Assignment History
+                    </div>
+                    <div class="apple-card-body">
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <thead>
+                                    <tr style="color: var(--apple-gray);">
+                                        <th>Driver</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for assignment in assignments %}
+                                    <tr>
+                                        <td class="fw-medium">
+                                            <i class="fas fa-user me-1" style="color: var(--apple-orange);"></i>
+                                            {{ assignment.driver }}
+                                        </td>
+                                        <td>{{ assignment.start_date }}</td>
+                                        <td>{{ assignment.end_date }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Fuel History -->
+                {% if flogs %}
+                <div class="apple-card mb-4 apple-slide-up" style="animation-delay: 0.3s;">
+                    <div class="apple-card-header">
+                        <i class="fas fa-gas-pump me-2" style="color: var(--apple-green);"></i>
+                        Recent Fuel History
+                    </div>
+                    <div class="apple-card-body">
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <thead>
+                                    <tr style="color: var(--apple-gray);">
+                                        <th>Date</th>
+                                        <th>Distance</th>
+                                        <th>Liters</th>
+                                        <th>Driver</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in flogs[-5:] %}
+                                    <tr>
+                                        <td>{{ log.date }}</td>
+                                        <td>
+                                            <span class="badge" style="background: var(--apple-light-gray); color: var(--apple-dark-gray);">
+                                                {{ (log.curr_odo - log.prev_odo)|int }} km
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <i class="fas fa-gas-pump me-1" style="color: var(--apple-green);"></i>
+                                            {{ log.liters }}L
+                                        </td>
+                                        <td class="fw-medium">{{ log.driver }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if flogs|length > 5 %}
+                        <div class="text
