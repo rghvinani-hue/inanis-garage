@@ -31,7 +31,6 @@ DATA_FILE = os.path.join(DATA_DIR, 'inanis_garage_data.pickle')
 for folder in ['static/css', 'static/car_thumbnails', 'static/documents', 'temp_uploads', 'templates']:
     os.makedirs(folder, exist_ok=True)
 
-# File to save Google Drive backup file ID
 BACKUP_ID_FILE = os.path.join(DATA_DIR, 'backup_file_id.txt')
 
 # ─── In-memory data storage ────────────────────────────────────────────
@@ -51,7 +50,9 @@ def get_google_credentials():
     try:
         creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
         if creds_json:
-            return json.loads(creds_json)
+            creds_obj = json.loads(creds_json)
+            logger.info("Google creds loaded from GOOGLE_CREDENTIALS_JSON")
+            return creds_obj
         creds = {
             "type": "service_account",
             "project_id": os.environ.get('GOOGLE_PROJECT_ID'),
@@ -65,7 +66,9 @@ def get_google_credentials():
             "client_x509_cert_url": os.environ.get('GOOGLE_CLIENT_CERT_URL')
         }
         if creds['project_id'] and creds['client_email'] and creds['private_key']:
+            logger.info("Google creds loaded from environment variables")
             return creds
+        logger.warning("Google creds incomplete")
         return None
     except Exception as e:
         logger.error(f"Loading Google creds failed: {e}")
@@ -137,7 +140,6 @@ def create_calendar_event(summary, description, start_date, end_date):
         logger.error(f"Calendar event failed: {e}")
         return None
 
-# Helper functions for backup file id persistence
 def save_backup_file_id(file_id):
     try:
         with open(BACKUP_ID_FILE, 'w') as f:
@@ -159,7 +161,6 @@ def load_data():
 
     drive_id = os.environ.get('GOOGLE_DATA_BACKUP_FILE_ID') or load_backup_file_id()
 
-    # Restore backup if local data missing and Drive enabled
     if not os.path.exists(DATA_FILE) and google_enabled and driveservice:
         if drive_id:
             download_file_from_drive(drive_id, DATA_FILE)
@@ -200,13 +201,12 @@ def save_data():
     except Exception as e:
         logger.error(f"Failed to save data: {e}")
 
-    # Backup to Drive
     if google_enabled and driveservice:
         try:
             backup_id, backup_link = upload_file_to_drive(DATA_FILE)
             if backup_id:
                 logger.info(f"✅ Data backup saved to Drive: {backup_id}")
-                save_backup_file_id(backup_id)  # Save backup ID locally
+                save_backup_file_id(backup_id)
         except Exception as e:
             logger.error(f"Failed to back up data to Drive: {e}")
 
@@ -234,4 +234,4 @@ init_google_services()
 load_data()
 
 # ─── ROUTES ─────────────────────────────────
-# (Your existing routes go below)
+# Add your existing Flask route functions below this line
