@@ -5,7 +5,6 @@ from datetime import datetime
 from functools import wraps
 import secrets
 import logging
-
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -20,9 +19,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-
 csrf = CSRFProtect(app)
-
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
@@ -33,6 +30,9 @@ DATA_FILE = os.path.join(DATA_DIR, 'inanis_garage_data.pickle')
 
 for folder in ['static/css', 'static/car_thumbnails', 'static/documents', 'temp_uploads', 'templates']:
     os.makedirs(folder, exist_ok=True)
+
+# File to save Google Drive backup file ID
+BACKUP_ID_FILE = os.path.join(DATA_DIR, 'backup_file_id.txt')
 
 # ─── In-memory data storage ────────────────────────────────────────────
 users = {}
@@ -137,23 +137,43 @@ def create_calendar_event(summary, description, start_date, end_date):
         logger.error(f"Calendar event failed: {e}")
         return None
 
+# Helper functions for backup file id persistence
+def save_backup_file_id(file_id):
+    try:
+        with open(BACKUP_ID_FILE, 'w') as f:
+            f.write(file_id)
+    except Exception as e:
+        logger.error(f"Failed to save backup file id: {e}")
+
+def load_backup_file_id():
+    try:
+        if os.path.exists(BACKUP_ID_FILE):
+            with open(BACKUP_ID_FILE, 'r') as f:
+                return f.read().strip()
+    except Exception as e:
+        logger.error(f"Failed to load backup file id: {e}")
+    return None
+
 def load_data():
     global users, vehicles, assignments, fuel_logs, documents, maintenance_records
+
+    drive_id = os.environ.get('GOOGLE_DATA_BACKUP_FILE_ID') or load_backup_file_id()
+
     # Restore backup if local data missing and Drive enabled
     if not os.path.exists(DATA_FILE) and google_enabled and driveservice:
-        drive_id = os.environ.get('GOOGLE_DATA_BACKUP_FILE_ID')
         if drive_id:
             download_file_from_drive(drive_id, DATA_FILE)
+
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'rb') as f:
                 data = pickle.load(f)
-                users = data.get('users', {})
-                vehicles = data.get('vehicles', {})
-                assignments = data.get('assignments', [])
-                fuel_logs = data.get('fuel_logs', {})
-                documents = data.get('documents', {})
-                maintenance_records = data.get('maintenance_records', {})
+            users = data.get('users', {})
+            vehicles = data.get('vehicles', {})
+            assignments = data.get('assignments', [])
+            fuel_logs = data.get('fuel_logs', {})
+            documents = data.get('documents', {})
+            maintenance_records = data.get('maintenance_records', {})
         except Exception as e:
             logger.error(f"Failed to load data: {e}")
 
@@ -179,12 +199,14 @@ def save_data():
             pickle.dump(data, f)
     except Exception as e:
         logger.error(f"Failed to save data: {e}")
+
     # Backup to Drive
     if google_enabled and driveservice:
         try:
             backup_id, backup_link = upload_file_to_drive(DATA_FILE)
             if backup_id:
                 logger.info(f"✅ Data backup saved to Drive: {backup_id}")
+                save_backup_file_id(backup_id)  # Save backup ID locally
         except Exception as e:
             logger.error(f"Failed to back up data to Drive: {e}")
 
@@ -207,4 +229,9 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# Initialize Google services and load data on app start
+init_google_services()
+load_data()
+
 # ─── ROUTES ─────────────────────────────────
+# (Your existing routes go below)
