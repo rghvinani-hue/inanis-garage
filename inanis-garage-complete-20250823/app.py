@@ -62,7 +62,7 @@ def init_google_services():
     global driveservice, calservice, google_enabled
     creds = get_google_credentials()
     if not creds:
-        logger.info("Google Drive disabled")
+        logger.info("Google Drive disabled: no valid credentials")
         return
     try:
         from google.oauth2 import service_account
@@ -76,6 +76,7 @@ def init_google_services():
         logger.info("✅ Google services initialized")
     except Exception as e:
         logger.error(f"Google init failed: {e}")
+        google_enabled = False
 
 def upload_file_to_drive(file_path):
     if not google_enabled or not driveservice:
@@ -213,7 +214,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ------------------------------ ADMIN VEHICLE ROUTES ------------------------------
+# --- Data Management Routes ---
 
 @app.route('/vehicles')
 @login_required
@@ -245,7 +246,6 @@ def add_vehicle():
             'make': request.form.get('make'),
             'model': request.form.get('model'),
             'year': request.form.get('year'),
-            # add more fields as needed
         }
         save_data()
         flash("Vehicle added successfully.", "success")
@@ -264,7 +264,6 @@ def edit_vehicle(vehicle_id):
         vehicle['make'] = request.form.get('make')
         vehicle['model'] = request.form.get('model')
         vehicle['year'] = request.form.get('year')
-        # update fields as needed
         save_data()
         flash("Vehicle updated successfully.", "success")
         return redirect(url_for('view_vehicle', vehicle_id=vehicle_id))
@@ -282,13 +281,6 @@ def delete_vehicle(vehicle_id):
         flash("Vehicle not found.", "error")
     return redirect(url_for('list_vehicles'))
 
-# ------------------------------ ADDED ROUTES FOR OTHER DATA SIMILARLY ------------------------------
-# You can similarly create add/edit/delete routes for users, assignments, fuel_logs, documents, maintenance_records
-# using the same pattern with @admin_required decorator and calling save_data() after update
-
-# INITIALIZATIONS
+# Initialize services and load data before the first request
 init_google_services()
 load_data()
-
-# Your existing routes and app running code beneath
-
