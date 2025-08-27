@@ -5,11 +5,10 @@ from datetime import datetime
 from functools import wraps
 import secrets
 import logging
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 
 # ─── Setup logging and app ──────────────────────────────────────────────
 os.makedirs('logs', exist_ok=True)
@@ -49,29 +48,14 @@ google_enabled = False
 def get_google_credentials():
     try:
         creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
-        if creds_json:
-            creds_obj = json.loads(creds_json)
-            logger.info("Google creds loaded from GOOGLE_CREDENTIALS_JSON")
-            return creds_obj
-        creds = {
-            "type": "service_account",
-            "project_id": os.environ.get('GOOGLE_PROJECT_ID'),
-            "private_key_id": os.environ.get('GOOGLE_PRIVATE_KEY_ID'),
-            "private_key": os.environ.get('GOOGLE_PRIVATE_KEY', '').replace('\\n', '\n'),
-            "client_email": os.environ.get('GOOGLE_CLIENT_EMAIL'),
-            "client_id": os.environ.get('GOOGLE_CLIENT_ID'),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": os.environ.get('GOOGLE_CLIENT_CERT_URL')
-        }
-        if creds['project_id'] and creds['client_email'] and creds['private_key']:
-            logger.info("Google creds loaded from environment variables")
-            return creds
-        logger.warning("Google creds incomplete")
-        return None
+        if not creds_json:
+            logger.warning("GOOGLE_CREDENTIALS_JSON environment variable not set")
+            return None
+        creds = json.loads(creds_json)
+        logger.info("Google credentials successfully loaded from environment variable")
+        return creds
     except Exception as e:
-        logger.error(f"Loading Google creds failed: {e}")
+        logger.error(f"Failed to load Google credentials JSON: {e}")
         return None
 
 def init_google_services():
@@ -229,9 +213,82 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# Initialize Google services and load data on app start
+# ------------------------------ ADMIN VEHICLE ROUTES ------------------------------
+
+@app.route('/vehicles')
+@login_required
+def list_vehicles():
+    return render_template('vehicles.html', vehicles=vehicles)
+
+@app.route('/vehicles/<vehicle_id>')
+@login_required
+def view_vehicle(vehicle_id):
+    vehicle = vehicles.get(vehicle_id)
+    if not vehicle:
+        flash("Vehicle not found.", "error")
+        return redirect(url_for('list_vehicles'))
+    return render_template('view_vehicle.html', vehicle=vehicle)
+
+@app.route('/vehicles/add', methods=['GET', 'POST'])
+@admin_required
+@login_required
+def add_vehicle():
+    if request.method == 'POST':
+        vehicle_id = request.form.get('vehicle_id')
+        if not vehicle_id:
+            flash("Vehicle ID is required.", "error")
+            return redirect(url_for('add_vehicle'))
+        if vehicle_id in vehicles:
+            flash("Vehicle ID already exists.", "error")
+            return redirect(url_for('add_vehicle'))
+        vehicles[vehicle_id] = {
+            'make': request.form.get('make'),
+            'model': request.form.get('model'),
+            'year': request.form.get('year'),
+            # add more fields as needed
+        }
+        save_data()
+        flash("Vehicle added successfully.", "success")
+        return redirect(url_for('view_vehicle', vehicle_id=vehicle_id))
+    return render_template('add_vehicle.html')
+
+@app.route('/vehicles/<vehicle_id>/edit', methods=['GET', 'POST'])
+@admin_required
+@login_required
+def edit_vehicle(vehicle_id):
+    vehicle = vehicles.get(vehicle_id)
+    if not vehicle:
+        flash("Vehicle not found.", "error")
+        return redirect(url_for('list_vehicles'))
+    if request.method == 'POST':
+        vehicle['make'] = request.form.get('make')
+        vehicle['model'] = request.form.get('model')
+        vehicle['year'] = request.form.get('year')
+        # update fields as needed
+        save_data()
+        flash("Vehicle updated successfully.", "success")
+        return redirect(url_for('view_vehicle', vehicle_id=vehicle_id))
+    return render_template('edit_vehicle.html', vehicle=vehicle)
+
+@app.route('/vehicles/<vehicle_id>/delete', methods=['POST'])
+@admin_required
+@login_required
+def delete_vehicle(vehicle_id):
+    if vehicle_id in vehicles:
+        del vehicles[vehicle_id]
+        save_data()
+        flash("Vehicle deleted successfully.", "success")
+    else:
+        flash("Vehicle not found.", "error")
+    return redirect(url_for('list_vehicles'))
+
+# ------------------------------ ADDED ROUTES FOR OTHER DATA SIMILARLY ------------------------------
+# You can similarly create add/edit/delete routes for users, assignments, fuel_logs, documents, maintenance_records
+# using the same pattern with @admin_required decorator and calling save_data() after update
+
+# INITIALIZATIONS
 init_google_services()
 load_data()
 
-# ─── ROUTES ─────────────────────────────────
-# Add your existing Flask route functions below this line
+# Your existing routes and app running code beneath
+
